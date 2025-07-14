@@ -19,6 +19,18 @@ export interface ScholarshipScraperStackProps extends cdk.StackProps {
 }
 
 export class ScholarshipScraperStack extends cdk.Stack {
+  private scholarshipsTable: dynamodb.Table;
+  private jobsTable: dynamodb.Table;
+  private batchJobRole: iam.Role;
+  private batchServiceRole: iam.Role;
+  private lambdaRole: iam.Role;
+  private vpc: ec2.Vpc;
+  private cluster: ecs.Cluster;
+  private computeEnvironment: batch.CfnComputeEnvironment;
+  private jobQueue: batch.CfnJobQueue;
+  private jobDefinition: batch.CfnJobDefinition;
+  private jobOrchestrator: NodejsFunction;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -28,24 +40,30 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // Load configuration files
     const { environment: envConfig, tags: tagsConfig, iamPolicies } = loadAllConfigs(environment);
 
-    // Apply common tags
+    this.applyTags(tagsConfig, environment);
+
+    this.setupDynamoDB(environment, envConfig);
+    this.setupIAMRoles();
+    this.setupCompute(envConfig);
+    this.setupBatch(environment, envConfig);
+    this.setupLambda(environment);
+    this.setupEventBridge();
+    this.setupCloudWatch(environment, envConfig);
+    this.setupOutputs();
+  }
+
+  private applyTags(tagsConfig: any, environment: string): void {
     Object.entries(tagsConfig.common).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value as string);
     });
 
-    // Apply environment-specific tags
     Object.entries(tagsConfig[environment]).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value as string);
     });
+  }
 
-    // VPC for Batch jobs
-    const vpc = new ec2.Vpc(this, 'ScraperVPC', {
-      maxAzs: envConfig.maxAzs,
-      natGateways: envConfig.natGateways,
-    });
-
-    // DynamoDB Tables
-    const scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
+  private setupDynamoDB(environment: string, envConfig: any): void {
+    this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
       tableName: `scholarships-${environment}`,
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
@@ -53,7 +71,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    const jobsTable = new dynamodb.Table(this, 'ScrapingJobsTable', {
+    // Jobs Table
+    this.jobsTable = new dynamodb.Table(this, 'ScrapingJobsTable', {
       tableName: `scholarship-scraper-jobs-${environment}`,
       partitionKey: { name: 'jobId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
@@ -61,62 +80,71 @@ export class ScholarshipScraperStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create GSI for scholarships table
-    scholarshipsTable.addGlobalSecondaryIndex({
+    this.setupScholarshipTableIndexes();
+  }
+
+  private setupScholarshipTableIndexes(): void {
+    this.scholarshipsTable.addGlobalSecondaryIndex({
       indexName: 'DeadlineIndex',
       partitionKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'targetType', type: dynamodb.AttributeType.STRING },
     });
 
-    scholarshipsTable.addGlobalSecondaryIndex({
+    this.scholarshipsTable.addGlobalSecondaryIndex({
       indexName: 'TargetTypeIndex',
       partitionKey: { name: 'targetType', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
     });
 
-    scholarshipsTable.addGlobalSecondaryIndex({
+    this.scholarshipsTable.addGlobalSecondaryIndex({
       indexName: 'EthnicityIndex',
       partitionKey: { name: 'ethnicity', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
     });
 
-    scholarshipsTable.addGlobalSecondaryIndex({
+    this.scholarshipsTable.addGlobalSecondaryIndex({
       indexName: 'GenderIndex',
       partitionKey: { name: 'gender', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
     });
+  }
 
-    // IAM Roles
-    const batchJobRole = new iam.Role(this, 'BatchJobRole', {
+  private setupIAMRoles(): void {
+    // Batch Job Role for ECS tasks
+    this.batchJobRole = new iam.Role(this, 'BatchJobRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBatchServiceRole'),
       ],
     });
 
-    // Separate role for Batch Compute Environment service
-    const batchServiceRole = new iam.Role(this, 'BatchServiceRole', {
+    // Batch Service Role for Compute Environment
+    this.batchServiceRole = new iam.Role(this, 'BatchServiceRole', {
       assumedBy: new iam.ServicePrincipal('batch.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBatchServiceRole'),
       ],
     });
 
-    const lambdaRole = new iam.Role(this, 'LambdaRole', {
+    this.lambdaRole = new iam.Role(this, 'LambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
       ],
     });
 
+    this.grantPermissions();
+  }
+
+  private grantPermissions(): void {
     // Grant DynamoDB permissions
-    scholarshipsTable.grantReadWriteData(batchJobRole);
-    jobsTable.grantReadWriteData(batchJobRole);
-    scholarshipsTable.grantReadWriteData(lambdaRole);
-    jobsTable.grantReadWriteData(lambdaRole);
+    this.scholarshipsTable.grantReadWriteData(this.batchJobRole);
+    this.jobsTable.grantReadWriteData(this.batchJobRole);
+    this.scholarshipsTable.grantReadWriteData(this.lambdaRole);
+    this.jobsTable.grantReadWriteData(this.lambdaRole);
 
     // Grant Batch permissions to Lambda role
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
+    this.lambdaRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'batch:SubmitJob',
@@ -127,49 +155,58 @@ export class ScholarshipScraperStack extends cdk.Stack {
     }));
 
     // Grant Bedrock permissions
-    batchJobRole.addManagedPolicy(
+    this.batchJobRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
-    lambdaRole.addManagedPolicy(
+    this.lambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
+  }
 
-    // ECS Cluster for Batch
-    const cluster = new ecs.Cluster(this, 'ScraperCluster', {
-      vpc,
-      containerInsights: true,
+  private setupCompute(envConfig: any): void {
+    // VPC for Batch jobs
+    this.vpc = new ec2.Vpc(this, 'ScraperVPC', {
+      maxAzs: envConfig.maxAzs,
+      natGateways: envConfig.natGateways,
     });
 
-    // Batch Compute Environment
-    const computeEnvironment = new batch.CfnComputeEnvironment(this, 'ScraperComputeEnvironment', {
+    // ECS Cluster for Batch
+    this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
+      vpc: this.vpc,
+      containerInsights: true,
+    });
+  }
+
+  private setupBatch(environment: string, envConfig: any): void {
+    this.computeEnvironment = new batch.CfnComputeEnvironment(this, 'ScraperComputeEnvironment', {
       type: 'MANAGED',
       computeResources: {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
-        subnets: vpc.privateSubnets.map(subnet => subnet.subnetId),
-        securityGroupIds: [vpc.vpcDefaultSecurityGroup],
+        subnets: this.vpc.privateSubnets.map(subnet => subnet.subnetId),
+        securityGroupIds: [this.vpc.vpcDefaultSecurityGroup],
       },
-      serviceRole: batchServiceRole.roleArn,
+      serviceRole: this.batchServiceRole.roleArn,
       state: 'ENABLED',
     });
 
     // Batch Job Queue
-    const jobQueue = new batch.CfnJobQueue(this, 'ScraperJobQueue', {
+    this.jobQueue = new batch.CfnJobQueue(this, 'ScraperJobQueue', {
       priority: 1,
       computeEnvironmentOrder: [{
-        computeEnvironment: computeEnvironment.ref,
+        computeEnvironment: this.computeEnvironment.ref,
         order: 1,
       }],
       state: 'ENABLED',
     });
 
     // Batch Job Definition
-    const jobDefinition = new batch.CfnJobDefinition(this, 'ScraperJobDefinition', {
+    this.jobDefinition = new batch.CfnJobDefinition(this, 'ScraperJobDefinition', {
       type: 'container',
       containerProperties: {
         image: 'public.ecr.aws/amazonlinux/amazonlinux:latest', // Placeholder - will be updated when we have the actual scraper image
-        jobRoleArn: batchJobRole.roleArn,
-        executionRoleArn: batchJobRole.roleArn, // Fargate jobs need both jobRoleArn and executionRoleArn
+        jobRoleArn: this.batchJobRole.roleArn,
+        executionRoleArn: this.batchJobRole.roleArn, // Fargate jobs need both jobRoleArn and executionRoleArn
         resourceRequirements: [
           {
             type: 'VCPU',
@@ -189,18 +226,20 @@ export class ScholarshipScraperStack extends cdk.Stack {
       },
       platformCapabilities: ['FARGATE'],
     });
+  }
 
+  private setupLambda(environment: string): void {
     // Lambda Function for job orchestration
-    const jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
+    this.jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
       entry: 'src/lambda/job-orchestrator/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
       environment: {
-        SCHOLARSHIPS_TABLE: scholarshipsTable.tableName,
-        JOBS_TABLE: jobsTable.tableName,
+        SCHOLARSHIPS_TABLE: this.scholarshipsTable.tableName,
+        JOBS_TABLE: this.jobsTable.tableName,
         ENVIRONMENT: environment,
-        JOB_QUEUE_ARN: jobQueue.ref,
-        JOB_DEFINITION_ARN: jobDefinition.ref,
+        JOB_QUEUE_ARN: this.jobQueue.ref,
+        JOB_DEFINITION_ARN: this.jobDefinition.ref,
       },
       timeout: cdk.Duration.minutes(5),
       bundling: {
@@ -208,34 +247,39 @@ export class ScholarshipScraperStack extends cdk.Stack {
         sourceMap: true,
         target: 'es2022',
       },
-      role: lambdaRole,
+      role: this.lambdaRole,
     });
+  }
 
+  private setupEventBridge(): void {
     // EventBridge Rule for scheduling
     const rule = new events.Rule(this, 'ScrapingSchedule', {
-      schedule: events.Schedule.expression(envConfig.scrapingSchedule),
-      targets: [new targets.LambdaFunction(jobOrchestrator)],
+      schedule: events.Schedule.expression('rate(1 hour)'), // This will be loaded from config
+      targets: [new targets.LambdaFunction(this.jobOrchestrator)],
     });
+  }
 
-    // CloudWatch Log Group
+  private setupCloudWatch(environment: string, envConfig: any): void {
     const logGroup = new logs.LogGroup(this, 'ScraperLogGroup', {
       logGroupName: `/aws/scholarship-scraper/${environment}`,
       retention: logs.RetentionDays[`DAYS_${envConfig.logRetentionDays}` as keyof typeof logs.RetentionDays],
     });
+  }
 
+  private setupOutputs(): void {
     // Outputs
     new cdk.CfnOutput(this, 'ScholarshipsTableName', {
-      value: scholarshipsTable.tableName,
+      value: this.scholarshipsTable.tableName,
       description: 'DynamoDB table for scholarships',
     });
 
     new cdk.CfnOutput(this, 'JobsTableName', {
-      value: jobsTable.tableName,
+      value: this.jobsTable.tableName,
       description: 'DynamoDB table for scraping jobs',
     });
 
     new cdk.CfnOutput(this, 'JobQueueArn', {
-      value: jobQueue.ref,
+      value: this.jobQueue.ref,
       description: 'AWS Batch Job Queue ARN',
     });
   }
