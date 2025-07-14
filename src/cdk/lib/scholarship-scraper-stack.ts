@@ -168,9 +168,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
       type: 'container',
       containerProperties: {
         image: 'public.ecr.aws/amazonlinux/amazonlinux:latest', // Placeholder - will be updated when we have the actual scraper image
-        vcpus: 1,
-        memory: 2048,
         jobRoleArn: batchJobRole.roleArn,
+        executionRoleArn: batchJobRole.roleArn, // Fargate jobs need both jobRoleArn and executionRoleArn
+        resourceRequirements: [
+          {
+            type: 'VCPU',
+            value: '1',
+          },
+          {
+            type: 'MEMORY',
+            value: '2048',
+          },
+        ],
         environment: [
           {
             name: 'ENVIRONMENT',
