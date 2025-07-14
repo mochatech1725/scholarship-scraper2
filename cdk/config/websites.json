@@ -1,0 +1,45 @@
+{
+  "websites": [
+    {
+      "name": "careerone",
+      "url": "https://careerone.com",
+      "type": "api",
+      "apiEndpoint": "https://api.careerone.com/scholarships",
+      "apiKey": "ENV_VAR_CAREERONE_API_KEY",
+      "enabled": true,
+      "scraperClass": "CareerOneScraper"
+    },
+    {
+      "name": "collegescholarship",
+      "url": "https://collegescholarship.com",
+      "type": "api",
+      "apiEndpoint": "https://api.collegescholarship.com/scholarships",
+      "apiKey": "ENV_VAR_COLLEGESCHOLARSHIP_API_KEY",
+      "enabled": true,
+      "scraperClass": "CollegeScholarshipScraper"
+    },
+    {
+      "name": "general_search",
+      "type": "search",
+      "searchTerms": [
+        "college scholarship",
+        "women's college scholarships",
+        "minority scholarships",
+        "LGBTQ scholarships",
+        "military scholarships",
+        "merit scholarships",
+        "need based scholarships",
+        "athletic scholarships",
+        "community service scholarships"
+      ],
+      "enabled": true,
+      "scraperClass": "GeneralSearchScraper"
+    }
+  ],
+  "searchConfig": {
+    "maxResultsPerTerm": 50,
+    "delayBetweenRequests": 2000,
+    "userAgent": "Mozilla/5.0 (compatible; ScholarshipBot/1.0; +https://yourdomain.com/bot)",
+    "respectRobotsTxt": true
+  }
+} 

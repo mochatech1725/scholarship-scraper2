@@ -1,0 +1,20 @@
+{
+  "common": {
+    "Project": "ScholarshipScraper",
+    "Owner": "Development Team",
+    "CostCenter": "Engineering",
+    "Environment": "dev"
+  },
+  "dev": {
+    "Environment": "dev",
+    "Purpose": "Development and Testing"
+  },
+  "staging": {
+    "Environment": "staging",
+    "Purpose": "Staging and Pre-production Testing"
+  },
+  "prod": {
+    "Environment": "prod",
+    "Purpose": "Production Application"
+  }
+} 

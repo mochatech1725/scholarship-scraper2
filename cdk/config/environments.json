@@ -1,0 +1,32 @@
+{
+  "dev": {
+    "environment": "dev",
+    "region": "us-east-1",
+    "maxAzs": 2,
+    "natGateways": 1,
+    "batchMaxVcpus": 256,
+    "dynamoBillingMode": "PAY_PER_REQUEST",
+    "logRetentionDays": 30,
+    "scrapingSchedule": "rate(1 hour)"
+  },
+  "prod": {
+    "environment": "prod",
+    "region": "us-east-1",
+    "maxAzs": 3,
+    "natGateways": 1,
+    "batchMaxVcpus": 512,
+    "dynamoBillingMode": "PROVISIONED",
+    "logRetentionDays": 90,
+    "scrapingSchedule": "rate(1 hour)"
+  },
+  "staging": {
+    "environment": "staging",
+    "region": "us-east-1",
+    "maxAzs": 2,
+    "natGateways": 1,
+    "batchMaxVcpus": 256,
+    "dynamoBillingMode": "PAY_PER_REQUEST",
+    "logRetentionDays": 60,
+    "scrapingSchedule": "rate(2 hours)"
+  }
+} 
