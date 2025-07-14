@@ -115,6 +115,17 @@ export class ScholarshipScraperStack extends cdk.Stack {
     scholarshipsTable.grantReadWriteData(lambdaRole);
     jobsTable.grantReadWriteData(lambdaRole);
 
+    // Grant Batch permissions to Lambda role
+    lambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'batch:SubmitJob',
+        'batch:DescribeJobs',
+        'batch:ListJobs'
+      ],
+      resources: ['*']
+    }));
+
     // Grant Bedrock permissions
     batchJobRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
@@ -122,25 +133,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
     lambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
-
-    // Lambda Function for job orchestration
-    const jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
-      entry: 'src/lambda/job-orchestrator/index.ts',
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      environment: {
-        SCHOLARSHIPS_TABLE: scholarshipsTable.tableName,
-        JOBS_TABLE: jobsTable.tableName,
-        ENVIRONMENT: environment,
-      },
-      timeout: cdk.Duration.minutes(5),
-      bundling: {
-        minify: true,
-        sourceMap: true,
-        target: 'es2022',
-      },
-      role: lambdaRole,
-    });
 
     // ECS Cluster for Batch
     const cluster = new ecs.Cluster(this, 'ScraperCluster', {
@@ -169,6 +161,45 @@ export class ScholarshipScraperStack extends cdk.Stack {
         order: 1,
       }],
       state: 'ENABLED',
+    });
+
+    // Batch Job Definition
+    const jobDefinition = new batch.CfnJobDefinition(this, 'ScraperJobDefinition', {
+      type: 'container',
+      containerProperties: {
+        image: 'public.ecr.aws/amazonlinux/amazonlinux:latest', // Placeholder - will be updated when we have the actual scraper image
+        vcpus: 1,
+        memory: 2048,
+        jobRoleArn: batchJobRole.roleArn,
+        environment: [
+          {
+            name: 'ENVIRONMENT',
+            value: environment,
+          },
+        ],
+      },
+      platformCapabilities: ['FARGATE'],
+    });
+
+    // Lambda Function for job orchestration
+    const jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
+      entry: 'src/lambda/job-orchestrator/index.ts',
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+      environment: {
+        SCHOLARSHIPS_TABLE: scholarshipsTable.tableName,
+        JOBS_TABLE: jobsTable.tableName,
+        ENVIRONMENT: environment,
+        JOB_QUEUE_ARN: jobQueue.ref,
+        JOB_DEFINITION_ARN: jobDefinition.ref,
+      },
+      timeout: cdk.Duration.minutes(5),
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        target: 'es2022',
+      },
+      role: lambdaRole,
     });
 
     // EventBridge Rule for scheduling
