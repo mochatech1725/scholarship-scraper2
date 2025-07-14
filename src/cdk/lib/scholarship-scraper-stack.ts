@@ -126,7 +126,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     const jobOrchestrator = new lambda.Function(this, 'JobOrchestrator', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset('src/lambda/job-orchestrator'),
+      code: lambda.Code.fromAsset('dist/src/lambda/job-orchestrator'),
       role: lambdaRole,
       environment: {
         SCHOLARSHIPS_TABLE: scholarshipsTable.tableName,
