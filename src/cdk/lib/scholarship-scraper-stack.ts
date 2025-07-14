@@ -11,6 +11,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { loadAllConfigs } from '../../utils/helper';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export interface ScholarshipScraperStackProps extends cdk.StackProps {
   environment: string;
@@ -123,17 +124,22 @@ export class ScholarshipScraperStack extends cdk.Stack {
     );
 
     // Lambda Function for job orchestration
-    const jobOrchestrator = new lambda.Function(this, 'JobOrchestrator', {
+    const jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
+      entry: 'src/lambda/job-orchestrator/index.ts',
+      handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('dist/src/lambda/job-orchestrator'),
-      role: lambdaRole,
       environment: {
         SCHOLARSHIPS_TABLE: scholarshipsTable.tableName,
         JOBS_TABLE: jobsTable.tableName,
         ENVIRONMENT: environment,
       },
       timeout: cdk.Duration.minutes(5),
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        target: 'es2022',
+      },
+      role: lambdaRole,
     });
 
     // ECS Cluster for Batch
