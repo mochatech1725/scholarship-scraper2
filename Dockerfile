@@ -1,55 +1,50 @@
-FROM public.ecr.aws/lambda/nodejs:18
+# Use Node.js 18 Alpine for smaller image size
+FROM node:18-alpine
 
-# Install system dependencies for Puppeteer
-RUN yum update -y && \
-    yum install -y \
-    wget \
+# Install system dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
     ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libdrm \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    xdg-utils \
-    libxss1 \
-    libxtst6 \
-    libx11-xcb1 \
-    libxcb-dri3-0 \
-    libdrm2 \
-    libgbm1 \
-    libasound2 \
-    libatspi2.0-0 \
-    libxshmfence1 \
-    && yum clean all
+    ttf-freefont
 
-# Set working directory
-WORKDIR /var/task
+# Set environment variables for Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Create app directory
+WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (including dev dependencies for TypeScript compilation)
+RUN npm ci
 
 # Copy source code
 COPY src/ ./src/
-COPY cdk/config/ ./cdk/config/
-COPY package*.json ./
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.docker.json ./
 
-# Create non-root user for security
-RUN groupadd -r scraper && useradd -r -g scraper scraper
+# Compile TypeScript using Docker-specific config
+RUN npx tsc -p tsconfig.docker.json
+
+# Remove dev dependencies and CDK files to reduce image size
+RUN npm prune --production
+RUN rm -rf src/cdk/ tsconfig.docker.json
+
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S scraper -u 1001
+
+# Change ownership of the app directory
+RUN chown -R scraper:nodejs /app
 USER scraper
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-
-# Default command
-CMD ["src/batch/index.js"] 
+# Set the entry point
+ENTRYPOINT ["node", "dist/src/batch/index.js"] 

@@ -35,7 +35,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment from context (passed via -c environment=dev)
-    const environment = this.node.tryGetContext('environment') || 'dev';
+    const environment = cdk.Stack.of(this).node.tryGetContext('environment') || 'dev';
 
     // Load configuration files
     const { environment: envConfig, tags: tagsConfig, iamPolicies } = loadAllConfigs(environment);
@@ -154,6 +154,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
       resources: ['*']
     }));
 
+    // Grant ECR permissions to batch job role
+    this.batchJobRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecr:GetAuthorizationToken',
+        'ecr:BatchCheckLayerAvailability',
+        'ecr:GetDownloadUrlForLayer',
+        'ecr:BatchGetImage'
+      ],
+      resources: ['*']
+    }));
+
     // Grant Bedrock permissions
     this.batchJobRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
@@ -183,7 +195,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
       computeResources: {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
-        subnets: this.vpc.privateSubnets.map(subnet => subnet.subnetId),
+        subnets: this.vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
         securityGroupIds: [this.vpc.vpcDefaultSecurityGroup],
       },
       serviceRole: this.batchServiceRole.roleArn,
@@ -200,11 +212,16 @@ export class ScholarshipScraperStack extends cdk.Stack {
       state: 'ENABLED',
     });
 
+    // Get ECR repository URI
+    const accountId = cdk.Stack.of(this).account;
+    const region = cdk.Stack.of(this).region;
+    const ecrImageUri = `${accountId}.dkr.ecr.${region}.amazonaws.com/scholarship-scraper:${environment}`;
+
     // Batch Job Definition
     this.jobDefinition = new batch.CfnJobDefinition(this, 'ScraperJobDefinition', {
       type: 'container',
       containerProperties: {
-        image: 'public.ecr.aws/amazonlinux/amazonlinux:latest', // Placeholder - will be updated when we have the actual scraper image
+        image: ecrImageUri,
         jobRoleArn: this.batchJobRole.roleArn,
         executionRoleArn: this.batchJobRole.roleArn, // Fargate jobs need both jobRoleArn and executionRoleArn
         resourceRequirements: [
@@ -281,6 +298,27 @@ export class ScholarshipScraperStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'JobQueueArn', {
       value: this.jobQueue.ref,
       description: 'AWS Batch Job Queue ARN',
+    });
+
+    new cdk.CfnOutput(this, 'JobDefinitionArn', {
+      value: this.jobDefinition.ref,
+      description: 'AWS Batch Job Definition ARN',
+    });
+
+    new cdk.CfnOutput(this, 'JobOrchestratorFunctionName', {
+      value: this.jobOrchestrator.functionName,
+      description: 'Lambda function name for job orchestration',
+    });
+
+    // ECR Image URI output
+    const accountId = cdk.Stack.of(this).account;
+    const region = cdk.Stack.of(this).region;
+    const environment = cdk.Stack.of(this).node.tryGetContext('environment') || 'dev';
+    const ecrImageUri = `${accountId}.dkr.ecr.${region}.amazonaws.com/scholarship-scraper:${environment}`;
+    
+    new cdk.CfnOutput(this, 'EcrImageUri', {
+      value: ecrImageUri,
+      description: 'ECR Image URI for the scraper container',
     });
   }
 } 

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "src/cdk/**/*",
+    "node_modules",
+    "dist"
+  ],
+  "include": [
+    "src/batch/**/*",
+    "src/scrapers/**/*",
+    "src/utils/**/*",
+    "src/lambda/**/*"
+  ]
+} 

@@ -56,3 +56,4 @@ temp/
 # TypeScript
 *.tsbuildinfo 
 .env.dev
+scripts/test-system.sh
