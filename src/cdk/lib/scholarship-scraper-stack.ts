@@ -10,7 +10,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import { loadAllConfigs } from '../../utils/helper';
+import { ConfigUtils } from '../../utils/helper';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export interface ScholarshipScraperStackProps extends cdk.StackProps {
@@ -38,7 +38,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     const environment = cdk.Stack.of(this).node.tryGetContext('environment') || 'dev';
 
     // Load configuration files
-    const { environment: envConfig, tags: tagsConfig, iamPolicies } = loadAllConfigs(environment);
+    const { environment: envConfig, tags: tagsConfig, iamPolicies } = ConfigUtils.loadAllConfigs(environment);
 
     this.applyTags(tagsConfig, environment);
 

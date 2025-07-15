@@ -2,22 +2,11 @@ import { BaseScraper } from './base-scraper';
 import { ScrapingResult, Scholarship } from '../utils/types';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import {
-  calculatePageOffset,
-  buildPageUrl,
-  SCRAPING_HEADERS,
-  withRetry,
-  formatDeadline,
-  cleanText,
-  removeRedundantPhrases,
-  truncateText,
-  cleanAcademicLevel,
-  cleanAmount,
-  determineTargetType,
-  extractEthnicity,
-  extractGender,
-  createScholarshipId,
-  ensureNonEmptyString
+import { 
+  ScrapingUtils, 
+  NetworkUtils, 
+  ScholarshipUtils, 
+  TextUtils 
 } from '../utils/helper';
 import {
   MAX_SCHOLARSHIP_SEARCH_RESULTS,
@@ -40,7 +29,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
   async fetchScholarshipDetails(url: string): Promise<Partial<Scholarship>> {
     try {
       const response = await axios.get(url, {
-        headers: SCRAPING_HEADERS,
+        headers: ScrapingUtils.SCRAPING_HEADERS,
         timeout: AXIOS_GET_TIMEOUT
       });
       const $ = cheerio.load(response.data);
@@ -61,17 +50,17 @@ export class CollegeScholarshipScraper extends BaseScraper {
         
         switch (label) {
           case 'deadline:':
-            details.deadline = formatDeadline(value);
+            details.deadline = ScholarshipUtils.formatDeadline(value);
             break;
           case 'renewable':
             details.renewable = value.toLowerCase().includes('yes') || value.toLowerCase().includes('renewable');
             break;
           case 'min. award:':
-            const minAmount = cleanAmount(value);
+            const minAmount = ScholarshipUtils.cleanAmount(value);
             details.minAward = parseFloat(minAmount) || 0;
             break;
           case 'max. award:':
-            const maxAmount = cleanAmount(value);
+            const maxAmount = ScholarshipUtils.cleanAmount(value);
             details.maxAward = parseFloat(maxAmount) || 0;
             break;
         }
@@ -86,20 +75,20 @@ export class CollegeScholarshipScraper extends BaseScraper {
         
         switch (label) {
           case 'enrollment level:':
-            details.academicLevel = cleanAcademicLevel(value) || '';
+            details.academicLevel = ScholarshipUtils.cleanAcademicLevel(value) || '';
             break;
           case 'country:':
-            details.country = cleanText(value, { quotes: true });
+            details.country = TextUtils.cleanText(value, { quotes: true });
             break;
           case 'major:':
-            details.eligibility = cleanText(value, { quotes: true });
+            details.eligibility = TextUtils.cleanText(value, { quotes: true });
             break;
         }
       });
       
       const sponsorInfo = $('.sponsor p').text().trim();
       if (sponsorInfo) {
-        details.organization = cleanText(sponsorInfo.split('\n')[0].trim(), { quotes: true });
+        details.organization = TextUtils.cleanText(sponsorInfo.split('\n')[0].trim(), { quotes: true });
       }
       
       const applyUrl = $('#description a[href*=".pdf"], #description a[href*="apply"], #description a[href*="application"]').attr('href');
@@ -129,13 +118,13 @@ export class CollegeScholarshipScraper extends BaseScraper {
         errors: [],
       });
 
-      scholarships = await withRetry(async () => {
+      scholarships = await NetworkUtils.withRetry(async () => {
         const baseOffset = COLLEGESCHOLARSHIPS_PAGE_OFFSET;
-        const pageOffset = calculatePageOffset({ baseOffset });
-        const searchUrl = buildPageUrl(COLLEGESCHOLARSHIPS_URL, pageOffset);
+        const pageOffset = ScrapingUtils.calculatePageOffset({ baseOffset });
+        const searchUrl = ScrapingUtils.buildPageUrl(COLLEGESCHOLARSHIPS_URL, pageOffset);
         
         const response = await axios.get(searchUrl, {
-          headers: SCRAPING_HEADERS,
+          headers: ScrapingUtils.SCRAPING_HEADERS,
           timeout: opts.timeout
         });
         
@@ -151,7 +140,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
           
           if ($summary.length > 0 && $description.length > 0) {
             let amount = $summary.find('.lead strong').text().trim() || 'Amount varies';
-            amount = cleanAmount(amount);
+            amount = ScholarshipUtils.cleanAmount(amount);
             const minAward = parseFloat(amount) || 0;
             const maxAward = minAward;
             
@@ -188,34 +177,34 @@ export class CollegeScholarshipScraper extends BaseScraper {
             const geographicRestrictions = geographicRestrictionsItems.join(' | ');
             
             if (title && !title.includes('Find Scholarships')) {
-              const cleanName = cleanText(title, { quotes: true });
-              const cleanDeadline = cleanText(formatDeadline(rawDeadline), { quotes: true });
-              const rawDescription = cleanText(description || '', { quotes: true });
-              const rawEligibility = cleanText(eligibility || '', { quotes: true });
-              const cleanedAcademicLevel = cleanAcademicLevel(academicLevel || '') || '';
-              const cleanGeographicRestrictions = cleanText(geographicRestrictions || '', { quotes: true });
+              const cleanName = TextUtils.cleanText(title, { quotes: true });
+              const cleanDeadline = TextUtils.cleanText(ScholarshipUtils.formatDeadline(rawDeadline), { quotes: true });
+              const rawDescription = TextUtils.cleanText(description || '', { quotes: true });
+              const rawEligibility = TextUtils.cleanText(eligibility || '', { quotes: true });
+              const cleanedAcademicLevel = ScholarshipUtils.cleanAcademicLevel(academicLevel || '') || '';
+              const cleanGeographicRestrictions = TextUtils.cleanText(geographicRestrictions || '', { quotes: true });
               
-              const targetTypeRaw = determineTargetType(`${title} ${description} ${eligibility}`);
+              const targetTypeRaw = ScholarshipUtils.determineTargetType(`${title} ${description} ${eligibility}`);
               const targetType = (targetTypeRaw === 'Merit' ? 'merit' : targetTypeRaw === 'Need' ? 'need' : 'both') as 'need' | 'merit' | 'both';
               
-              const ethnicity = extractEthnicity(`${title} ${description} ${eligibility}`);
-              const gender = extractGender(`${title} ${description} ${eligibility}`);
+              const ethnicity = ScholarshipUtils.extractEthnicity(`${title} ${description} ${eligibility}`);
+              const gender = ScholarshipUtils.extractGender(`${title} ${description} ${eligibility}`);
               
               const scholarshipPromise = (async () => {
-                const scholarship: Scholarship = {
-                  id: createScholarshipId(),
+                                const scholarship: Scholarship = {
+                  id: ScholarshipUtils.createScholarshipId(),
                   name: cleanName,
                   deadline: cleanDeadline,
                   url: link || '',
-                  description: truncateText(removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH),
-                  eligibility: truncateText(removeRedundantPhrases(rawEligibility), ELIGIBILITY_MAX_LENGTH),
+                  description: TextUtils.truncateText(TextUtils.removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH),
+                  eligibility: TextUtils.truncateText(TextUtils.removeRedundantPhrases(rawEligibility), ELIGIBILITY_MAX_LENGTH),
                   source: 'CollegeScholarships',
                   organization: '',
                   academicLevel: cleanedAcademicLevel,
                   geographicRestrictions: cleanGeographicRestrictions || '',
                   targetType,
-                                               ethnicity: ensureNonEmptyString(ethnicity, 'unspecified'),
-           gender: ensureNonEmptyString(gender, 'unspecified'),
+                  ethnicity: TextUtils.ensureNonEmptyString(ethnicity, 'unspecified'),
+                  gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
                   minAward,
                   maxAward,
                   renewable: false,

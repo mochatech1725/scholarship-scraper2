@@ -11,27 +11,15 @@ import {
   MAX_RETRY_ATTEMPTS,
   AWS_BEDROCK_VERSION
 } from '../utils/constants';
-import {
-  withRetry,
-  cleanText,
-  determineTargetType,
-  extractAcademicLevel,
-  extractEthnicity,
-  extractGender,
-  createScholarshipId,
-  removeRedundantPhrases,
-  truncateText,
-  cleanAcademicLevel,
-  cleanAmount,
-  RateLimiter,
-  isTimeoutError,
-  isThrottlingError,
-  ensureNonEmptyString
+import { 
+  NetworkUtils, 
+  TextUtils, 
+  ScholarshipUtils 
 } from '../utils/helper';
 
 export class GeneralSearchScraper extends BaseScraper {
   private bedrockClient: BedrockRuntimeClient;
-  private rateLimiter: RateLimiter;
+  private rateLimiter: InstanceType<typeof NetworkUtils.RateLimiter>;
 
   constructor(
     scholarshipsTable: string,
@@ -41,7 +29,7 @@ export class GeneralSearchScraper extends BaseScraper {
   ) {
     super(scholarshipsTable, jobsTable, jobId, environment);
     this.bedrockClient = new BedrockRuntimeClient({});
-    this.rateLimiter = new RateLimiter(1); // 1 call per second
+    this.rateLimiter = new NetworkUtils.RateLimiter(1); // 1 call per second
   }
 
   async scrape(): Promise<ScrapingResult> {
@@ -136,7 +124,7 @@ export class GeneralSearchScraper extends BaseScraper {
   private async performSearch(searchFocuses: string[], maxScholarshipsPerFocus: number, allScholarships: Partial<Scholarship>[]): Promise<Partial<Scholarship>[]> {
     for (const searchFocus of searchFocuses) {
       try {
-        const scholarships = await withRetry(async () => {
+        const scholarships = await NetworkUtils.withRetry(async () => {
           return await this.getScholarshipsForFocus(searchFocus, maxScholarshipsPerFocus);
         }, MAX_RETRY_ATTEMPTS);
         
@@ -204,36 +192,36 @@ export class GeneralSearchScraper extends BaseScraper {
       if (Array.isArray(scholarshipsData)) {
         return scholarshipsData.map((scholarship: any) => {
           // Clean all text fields before creating scholarship object
-          const cleanTitle = cleanText(String(scholarship.title || scholarship.name || scholarship.scholarshipName || 'Scholarship'), { quotes: true });
-          const cleanDeadline = cleanText(String(scholarship.deadline || scholarship.applicationDeadline || 'Various deadlines'), { quotes: true });
-          const rawDescription = cleanText(String(scholarship.description || scholarship.purpose || 'No description available'), { quotes: true });
-          const cleanDescription = truncateText(removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH);
-          const cleanOrganization = cleanText(String(scholarship.organization || scholarship.sponsor || scholarship.institution || ''), { quotes: true });
-          const cleanGeographicRestrictions = cleanText(String(scholarship.geographicRestrictions || scholarship.location || scholarship.region || ''), { quotes: true });
-          const cleanMinAward = cleanAmount(String(scholarship.minAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
-          const cleanMaxAward = cleanAmount(String(scholarship.maxAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
-          const cleanRenewable = cleanText(String(scholarship.renewable || ''), { quotes: true });
-          const cleanCountry = cleanText(String(scholarship.country || scholarship.nationality || ''), { quotes: true });
-          const cleanApplyUrl = cleanText(String(scholarship.applyUrl || scholarship.applicationUrl || scholarship.url || ''), { quotes: true });
+          const cleanTitle = TextUtils.cleanText(String(scholarship.title || scholarship.name || scholarship.scholarshipName || 'Scholarship'), { quotes: true });
+          const cleanDeadline = TextUtils.cleanText(String(scholarship.deadline || scholarship.applicationDeadline || 'Various deadlines'), { quotes: true });
+          const rawDescription = TextUtils.cleanText(String(scholarship.description || scholarship.purpose || 'No description available'), { quotes: true });
+          const cleanDescription = TextUtils.truncateText(TextUtils.removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH);
+          const cleanOrganization = TextUtils.cleanText(String(scholarship.organization || scholarship.sponsor || scholarship.institution || ''), { quotes: true });
+          const cleanGeographicRestrictions = TextUtils.cleanText(String(scholarship.geographicRestrictions || scholarship.location || scholarship.region || ''), { quotes: true });
+          const cleanMinAward = ScholarshipUtils.cleanAmount(String(scholarship.minAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
+          const cleanMaxAward = ScholarshipUtils.cleanAmount(String(scholarship.maxAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
+          const cleanRenewable = TextUtils.cleanText(String(scholarship.renewable || ''), { quotes: true });
+          const cleanCountry = TextUtils.cleanText(String(scholarship.country || scholarship.nationality || ''), { quotes: true });
+          const cleanApplyUrl = TextUtils.cleanText(String(scholarship.applyUrl || scholarship.applicationUrl || scholarship.url || ''), { quotes: true });
           
           const rawEligibility = String(scholarship.eligibility || scholarship.requirements || scholarship.qualifications || 'Eligibility requirements vary');
-          const cleanEligibility = truncateText(removeRedundantPhrases(cleanText(rawEligibility, { quotes: true })), ELIGIBILITY_MAX_LENGTH);
+          const cleanEligibility = TextUtils.truncateText(TextUtils.removeRedundantPhrases(TextUtils.cleanText(rawEligibility, { quotes: true })), ELIGIBILITY_MAX_LENGTH);
           
           const allText = `${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility} ${scholarship.academicLevel || ''} ${scholarship.levelOfStudy || ''} ${scholarship.educationLevel || ''}`;
-          const extractedAcademicLevel = extractAcademicLevel(allText);
-          const cleanedAcademicLevel = cleanAcademicLevel(extractedAcademicLevel);
+          const extractedAcademicLevel = ScholarshipUtils.extractAcademicLevel(allText);
+          const cleanedAcademicLevel = ScholarshipUtils.cleanAcademicLevel(extractedAcademicLevel);
           
           const combinedEligibility = extractedAcademicLevel 
             ? `${cleanEligibility}${cleanEligibility ? ' | ' : ''}${extractedAcademicLevel}`
             : cleanEligibility;
           
-          const targetType = determineTargetType(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          const targetType = ScholarshipUtils.determineTargetType(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
           
-          const ethnicity = extractEthnicity(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
-          const gender = extractGender(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          const ethnicity = ScholarshipUtils.extractEthnicity(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          const gender = ScholarshipUtils.extractGender(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
           
           return {
-            id: createScholarshipId(),
+            id: ScholarshipUtils.createScholarshipId(),
             name: cleanTitle,
             deadline: cleanDeadline,
             url: scholarship.url || scholarship.website || scholarship.applicationUrl || '',
@@ -244,8 +232,8 @@ export class GeneralSearchScraper extends BaseScraper {
             academicLevel: cleanedAcademicLevel,
             geographicRestrictions: cleanGeographicRestrictions,
             targetType: (targetType as 'need' | 'merit' | 'both'),
-            ethnicity: ensureNonEmptyString(ethnicity, 'unspecified'),
-            gender: ensureNonEmptyString(gender, 'unspecified'),
+            ethnicity: TextUtils.ensureNonEmptyString(ethnicity, 'unspecified'),
+            gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
             minAward: parseFloat(cleanMinAward.toString()) || 0,
             maxAward: parseFloat(cleanMaxAward.toString()) || 0,
             renewable: cleanRenewable.toLowerCase().includes('true') || cleanRenewable.toLowerCase().includes('yes'),
@@ -265,10 +253,10 @@ export class GeneralSearchScraper extends BaseScraper {
     } catch (error) {
       // Enhanced error logging for different types of errors
       if (error instanceof Error) {
-        if (isThrottlingError(error)) {
+        if (NetworkUtils.isThrottlingError(error)) {
           console.error(`Bedrock throttling error for focus "${searchFocus}":`, error.message);
           console.log('This error will be handled by the retry mechanism with exponential backoff');
-        } else if (isTimeoutError(error)) {
+        } else if (NetworkUtils.isTimeoutError(error)) {
           console.error(`Bedrock timeout error for focus "${searchFocus}":`, error.message);
           console.log('This error will be handled by the retry mechanism with exponential backoff');
         } else {

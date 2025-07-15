@@ -8,12 +8,41 @@ export interface PageOffsetOptions {
   useDayBasedOffset?: boolean;
 }
 
+export interface CleanTextOptions {
+  quotes?: boolean;
+  commas?: boolean;
+  currencySymbol?: boolean;
+}
+
 // Shared HTTP headers for web scraping
-export const SCRAPING_HEADERS = {
+const SCRAPING_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 };
 
-export function calculatePageOffset(options: PageOffsetOptions = {}): number {
+// Rate limiter for Bedrock API calls
+class RateLimiter {
+  private lastCallTime = 0;
+  private readonly minInterval: number;
+
+  constructor(callsPerSecond: number = 1) {
+    this.minInterval = 1000 / callsPerSecond; // Convert to milliseconds
+  }
+
+  async waitForNextCall(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastCallTime;
+    
+    if (timeSinceLastCall < this.minInterval) {
+      const waitTime = this.minInterval - timeSinceLastCall;
+      console.log(`Rate limiter: waiting ${waitTime}ms before next API call`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastCallTime = Date.now();
+  }
+}
+
+function calculatePageOffset(options: PageOffsetOptions = {}): number {
   const {
     baseOffset = 0,
     useTimeBasedOffset = true,
@@ -48,14 +77,14 @@ export function calculatePageOffset(options: PageOffsetOptions = {}): number {
   return offset;
 }
 
-export function buildPageUrl(baseUrl: string, pageOffset: number): string {
+function buildPageUrl(baseUrl: string, pageOffset: number): string {
   if (pageOffset > 0) {
     return `${baseUrl}?page=${pageOffset}`;
   }
   return baseUrl;
 }
 
-export async function withRetry<T>(operation: () => Promise<T>, retries: number): Promise<T> {
+async function withRetry<T>(operation: () => Promise<T>, retries: number): Promise<T> {
   try {
     return await operation();
   } catch (error) {
@@ -85,30 +114,9 @@ export async function withRetry<T>(operation: () => Promise<T>, retries: number)
   }
 }
 
-// Rate limiter for Bedrock API calls
-export class RateLimiter {
-  private lastCallTime = 0;
-  private readonly minInterval: number;
 
-  constructor(callsPerSecond: number = 1) {
-    this.minInterval = 1000 / callsPerSecond; // Convert to milliseconds
-  }
 
-  async waitForNextCall(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastCall = now - this.lastCallTime;
-    
-    if (timeSinceLastCall < this.minInterval) {
-      const waitTime = this.minInterval - timeSinceLastCall;
-      console.log(`Rate limiter: waiting ${waitTime}ms before next API call`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    this.lastCallTime = Date.now();
-  }
-}
-
-export function formatDeadline(deadline: string): string {
+function formatDeadline(deadline: string): string {
   if (!deadline || deadline.toLowerCase().includes('no deadline') || deadline.toLowerCase().includes('rolling')) {
     return deadline;
   }
@@ -198,7 +206,7 @@ export interface CleanTextOptions {
  * @param options - Object specifying what to remove
  * @returns Cleaned text without specified characters
  */
-export function cleanText(text: string | undefined | null, options: CleanTextOptions = {}): string {
+function cleanText(text: string | undefined | null, options: CleanTextOptions = {}): string {
   if (!text) return '';
   
   const { quotes = false, commas = false, currencySymbol = false } = options;
@@ -226,7 +234,7 @@ export function cleanText(text: string | undefined | null, options: CleanTextOpt
  * @param text - The amount text to clean
  * @returns Cleaned amount text
  */
-export function cleanAmount(text: string): string {
+function cleanAmount(text: string): string {
   if (!text) return '';
   
   let cleaned = text;
@@ -254,7 +262,7 @@ export function cleanAmount(text: string): string {
  * @param error - The error to check
  * @returns True if the error is a timeout error
  */
-export function isTimeoutError(error: unknown): boolean {
+function isTimeoutError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   
   const errorMessage = error.message.toLowerCase();
@@ -269,7 +277,7 @@ export function isTimeoutError(error: unknown): boolean {
  * @param error - The error to check
  * @returns True if the error is a throttling error
  */
-export function isThrottlingError(error: unknown): boolean {
+function isThrottlingError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   
   const errorMessage = error.message.toLowerCase();
@@ -283,7 +291,7 @@ export function isThrottlingError(error: unknown): boolean {
  * @param text - The text to analyze (title, description, eligibility, etc.)
  * @returns Target type: 'Merit', 'Need', 'Both', or 'Not specified'
  */
-export function determineTargetType(text: string): string {
+function determineTargetType(text: string): string {
   if (!text) return 'Not specified';
   
   const lowerText = text.toLowerCase();
@@ -326,7 +334,7 @@ export function determineTargetType(text: string): string {
  * @param text - The text to analyze
  * @returns Comma-separated string of academic level keywords found
  */
-export function extractAcademicLevel(text: string): string {
+function extractAcademicLevel(text: string): string {
   if (!text) return '';
   
   const lowerText = text.toLowerCase();
@@ -381,7 +389,7 @@ export function extractAcademicLevel(text: string): string {
  * @param text - The text to analyze
  * @returns Comma-separated string of ethnicity keywords found
  */
-export function extractEthnicity(text: string): string {
+function extractEthnicity(text: string): string {
   if (!text) return '';
   
   const lowerText = text.toLowerCase();
@@ -440,7 +448,7 @@ export function extractEthnicity(text: string): string {
  * @param text - The text to analyze
  * @returns Gender: 'female', 'male', or undefined
  */
-export function extractGender(text: string): string | undefined {
+function extractGender(text: string): string | undefined {
   if (!text) return undefined;
   
   const lowerText = text.toLowerCase();
@@ -462,7 +470,7 @@ export function extractGender(text: string): string | undefined {
  * @param text - The text to clean
  * @returns Cleaned text without redundant phrases
  */
-export function removeRedundantPhrases(text: string): string {
+function removeRedundantPhrases(text: string): string {
   if (!text) return text;
   
   let cleaned = text;
@@ -501,7 +509,7 @@ export function removeRedundantPhrases(text: string): string {
  * @param maxLength - Maximum length allowed
  * @returns Truncated text with ellipsis if needed
  */
-export function truncateText(text: string, maxLength: number): string {
+function truncateText(text: string, maxLength: number): string {
   if (!text || text.length <= maxLength) {
     return text;
   }
@@ -515,7 +523,7 @@ export function truncateText(text: string, maxLength: number): string {
  * Creates a unique scholarship ID
  * @returns A unique string identifier for scholarships
  */
-export function createScholarshipId(): string {
+function createScholarshipId(): string {
   return uuidv4();
 }
 
@@ -525,7 +533,7 @@ export function createScholarshipId(): string {
  * @param defaultValue - Default value to use if empty
  * @returns The value or default value
  */
-export function ensureNonEmptyString(value: string | undefined | null, defaultValue: string = 'unspecified'): string {
+function ensureNonEmptyString(value: string | undefined | null, defaultValue: string = 'unspecified'): string {
   return value && value.trim() !== '' ? value.trim() : defaultValue;
 } 
 
@@ -534,7 +542,7 @@ export function ensureNonEmptyString(value: string | undefined | null, defaultVa
  * @param text - The academic level text to clean
  * @returns Cleaned academic level text in lowercase, or undefined if empty
  */
-export function cleanAcademicLevel(text: string): string | undefined {
+function cleanAcademicLevel(text: string): string | undefined {
   if (!text) return undefined;
   const cleaned = text.replace(/study/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   return cleaned || undefined;
@@ -545,7 +553,7 @@ export function cleanAcademicLevel(text: string): string | undefined {
  * @param filename - The name of the JSON file (e.g., 'environments.json', 'tags.json')
  * @returns The parsed JSON content
  */
-export function loadConfigFile<T = any>(filename: string): T {
+function loadConfigFile<T = any>(filename: string): T {
   try {
     // Get the project root directory (assuming this is called from src/)
     const projectRoot = path.resolve(__dirname, '../../');
@@ -568,7 +576,7 @@ export function loadConfigFile<T = any>(filename: string): T {
  * @param environment - The environment name (e.g., 'dev', 'staging', 'prod')
  * @returns The environment configuration object
  */
-export function loadEnvironmentConfig(environment: string): any {
+function loadEnvironmentConfig(environment: string): any {
   const environments = loadConfigFile('environments.json');
   const envConfig = environments[environment];
   
@@ -584,12 +592,119 @@ export function loadEnvironmentConfig(environment: string): any {
  * @param environment - The environment name
  * @returns Object containing all configuration data
  */
-export function loadAllConfigs(environment: string) {
+function loadAllConfigs(environment: string) {
   return {
     environment: loadEnvironmentConfig(environment),
     tags: loadConfigFile('tags.json'),
     iamPolicies: loadConfigFile('iam-policies.json'),
   };
 }
+
+/**
+ * Validates that required configuration keys exist
+ * @param config - The configuration object to validate
+ * @param requiredKeys - Array of required configuration keys
+ * @throws Error if any required keys are missing
+ */
+function validateConfig(config: any, requiredKeys: string[]): void {
+  const missingKeys = requiredKeys.filter(key => !(key in config));
+  if (missingKeys.length > 0) {
+    throw new Error(`Missing required configuration keys: ${missingKeys.join(', ')}`);
+  }
+}
+
+/**
+ * Gets a nested configuration value using dot notation
+ * @param config - The configuration object
+ * @param path - Dot notation path (e.g., 'database.host')
+ * @param defaultValue - Default value if path doesn't exist
+ * @returns The configuration value or default
+ */
+function getConfigValue(config: any, path: string, defaultValue?: any): any {
+  const keys = path.split('.');
+  let current = config;
+  
+  for (const key of keys) {
+    if (current && typeof current === 'object' && key in current) {
+      current = current[key];
+    } else {
+      return defaultValue;
+    }
+  }
+  
+  return current;
+}
+
+/**
+ * Merges multiple configuration objects with environment-specific overrides
+ * @param baseConfig - Base configuration
+ * @param environmentConfig - Environment-specific configuration
+ * @returns Merged configuration object
+ */
+function mergeConfigs(baseConfig: any, environmentConfig: any): any {
+  return {
+    ...baseConfig,
+    ...environmentConfig,
+    // Deep merge for nested objects if needed
+    ...(baseConfig.environment && environmentConfig.environment ? {
+      environment: { ...baseConfig.environment, ...environmentConfig.environment }
+    } : {})
+  };
+}
+
+// Export grouped utilities
+export const ScholarshipUtils = {
+  determineTargetType,
+  extractAcademicLevel,
+  extractEthnicity,
+  extractGender,
+  createScholarshipId,
+  cleanAcademicLevel,
+  cleanAmount,
+  formatDeadline
+};
+
+export const TextUtils = {
+  cleanText,
+  removeRedundantPhrases,
+  truncateText,
+  ensureNonEmptyString
+};
+
+export const NetworkUtils = {
+  withRetry,
+  RateLimiter,
+  isTimeoutError,
+  isThrottlingError
+};
+
+export const ConfigUtils = {
+  loadConfigFile,
+  loadEnvironmentConfig,
+  loadAllConfigs,
+  validateConfig,
+  getConfigValue,
+  mergeConfigs
+};
+
+export const ScrapingUtils = {
+  calculatePageOffset,
+  buildPageUrl,
+  SCRAPING_HEADERS
+};
+
+// For backward compatibility, also export a single Helper object
+export const Helper = {
+  // Scholarship utilities
+  ...ScholarshipUtils,
+  // Text utilities
+  ...TextUtils,
+  // Network utilities
+  ...NetworkUtils,
+  // Config utilities
+  ...ConfigUtils,
+  // Scraping utilities
+  ...ScrapingUtils
+};
 
  
