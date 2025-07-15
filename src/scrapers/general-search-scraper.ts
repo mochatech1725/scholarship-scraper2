@@ -3,7 +3,7 @@ import { ScrapingResult, Scholarship } from '../utils/types';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import puppeteer from 'puppeteer';
 import { 
-  BEDROCK_MODEL_ID, 
+  AWS_BEDROCK_MODEL_ID,
   MAX_SCHOLARSHIP_SEARCH_RESULTS,
   DESCRIPTION_MAX_LENGTH,
   ELIGIBILITY_MAX_LENGTH,
@@ -11,11 +11,7 @@ import {
   MAX_RETRY_ATTEMPTS,
   AWS_BEDROCK_VERSION
 } from '../utils/constants';
-import { 
-  NetworkUtils, 
-  TextUtils, 
-  ScholarshipUtils 
-} from '../utils/helper';
+import { NetworkUtils, TextUtils, ScholarshipUtils } from '../utils/helper';
 import { RateLimiter } from './RateLimiter';
 
 export class GeneralSearchScraper extends BaseScraper {
@@ -140,6 +136,7 @@ export class GeneralSearchScraper extends BaseScraper {
         console.log(`Skipping focus "${searchFocus}" and continuing with next focus`);
         continue; // Continue with next focus even if one fails
       }
+
     }
 
     const uniqueScholarships = this.removeDuplicates(allScholarships);
@@ -168,7 +165,7 @@ export class GeneralSearchScraper extends BaseScraper {
     };
 
     const command = new InvokeModelCommand({
-      modelId: BEDROCK_MODEL_ID,
+      modelId: AWS_BEDROCK_MODEL_ID,
       contentType: "application/json",
       accept: "application/json",
       body: JSON.stringify(payload)

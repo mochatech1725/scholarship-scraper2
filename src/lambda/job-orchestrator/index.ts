@@ -4,12 +4,9 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   ENVIRONMENT, 
-  SCHOLARSHIPS_TABLE, 
-  JOBS_TABLE, 
-  JOB_QUEUE_ARN, 
-  JOB_DEFINITION_ARN,
   LAMBDA_TIMEOUT_MINUTES
 } from '../../utils/constants';
+import { ConfigUtils } from '../../utils/helper';
 
 const batchClient = new BatchClient({});
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -37,32 +34,40 @@ export const handler = async (event: any): Promise<any> => {
     };
 
     await dynamoClient.send(new PutCommand({
-      TableName: JOBS_TABLE,
+      TableName: process.env.JOBS_TABLE!,
       Item: jobRecord,
     }));
 
-    // Submit batch job for each website
-    const websites = ['careerone', 'collegescholarship', 'general_search'];
-    
-    for (const website of websites) {
-      const batchJobParams = {
-        jobName: `scholarship-scraper-${website}-${jobId}`,
-        jobQueue: JOB_QUEUE_ARN,
-        jobDefinition: JOB_DEFINITION_ARN,
+    // Load website configuration
+    const websitesConfig = ConfigUtils.loadConfigFile('websites.json');
+    const enabledWebsites = websitesConfig.websites.filter((site: any) => site.enabled);
+
+    // Submit batch job for each enabled website
+    const jobPromises = enabledWebsites.map(async (website: any) => {
+      const websiteJobId = `${jobId}-${website.name}`;
+      
+      console.log(`Submitting job for ${website.name} (${website.scraperClass})`);
+      
+      const jobParams = {
+        jobName: `scholarship-scraper-${website.name}-${Date.now()}`,
+        jobQueue: process.env.JOB_QUEUE_ARN!,
+        jobDefinition: process.env.JOB_DEFINITION_ARN!,
         parameters: {
-          website,
-          jobId,
-          environment,
+          website: website.name,
+          jobId: websiteJobId,
+          environment: environment,
+          scholarshipsTable: process.env.SCHOLARSHIPS_TABLE!,
+          jobsTable: process.env.JOBS_TABLE!,
         },
         containerOverrides: {
           environment: [
             {
               name: 'WEBSITE',
-              value: website,
+              value: website.name,
             },
             {
               name: 'JOB_ID',
-              value: jobId,
+              value: websiteJobId,
             },
             {
               name: 'ENVIRONMENT',
@@ -70,32 +75,77 @@ export const handler = async (event: any): Promise<any> => {
             },
             {
               name: 'SCHOLARSHIPS_TABLE',
-              value: SCHOLARSHIPS_TABLE,
+              value: process.env.SCHOLARSHIPS_TABLE!,
             },
             {
               name: 'JOBS_TABLE',
-              value: JOBS_TABLE,
+              value: process.env.JOBS_TABLE!,
             },
           ],
         },
+        timeout: {
+          attemptDurationSeconds: LAMBDA_TIMEOUT_MINUTES * 60,
+        },
       };
 
-      console.log(`Submitting batch job for ${website}:`, batchJobParams);
+      try {
+        const submitJobCommand = new SubmitJobCommand(jobParams);
+        const submitJobResponse = await batchClient.send(submitJobCommand);
+        
+        console.log(`Successfully submitted job for ${website.name}:`, submitJobResponse.jobId);
+        
+        return {
+          website: website.name,
+          jobId: submitJobResponse.jobId,
+          status: 'submitted',
+        };
+      } catch (error) {
+        console.error(`Failed to submit job for ${website.name}:`, error);
+        return {
+          website: website.name,
+          jobId: null,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
 
-      await batchClient.send(new SubmitJobCommand(batchJobParams));
+    const jobResults = await Promise.all(jobPromises);
+    
+    const successfulJobs = jobResults.filter(result => result.status === 'submitted');
+    const failedJobs = jobResults.filter(result => result.status === 'failed');
+
+    console.log(`Job submission completed:`, {
+      total: jobResults.length,
+      successful: successfulJobs.length,
+      failed: failedJobs.length,
+    });
+
+    if (failedJobs.length > 0) {
+      console.warn('Some jobs failed to submit:', failedJobs);
     }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Batch jobs submitted successfully',
+        message: 'Jobs submitted successfully',
         jobId,
-        websitesSubmitted: websites,
+        totalJobs: jobResults.length,
+        successfulJobs: successfulJobs.length,
+        failedJobs: failedJobs.length,
+        results: jobResults,
       }),
     };
 
   } catch (error) {
     console.error('Error in job orchestrator:', error);
-    throw error;
+    
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: 'Error submitting jobs',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
+    };
   }
 }; 

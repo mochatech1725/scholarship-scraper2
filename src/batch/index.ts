@@ -1,6 +1,8 @@
 import { CareerOneScraper } from '../scrapers/careerone-scraper';
 import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scraper';
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
+import { GumLoopScraper } from '../scrapers/gumloop-scraper';
+import { GumLoopDiscoveryScraper } from '../scrapers/gumloop-discovery-scraper';
 import { ScrapingResult } from '../utils/types';
 
 // Get environment variables
@@ -64,6 +66,24 @@ async function runScraper(): Promise<void> {
         );
         break;
 
+      case 'gumloop':
+        scraper = new GumLoopScraper(
+          scholarshipsTable,
+          jobsTable,
+          jobId,
+          environment
+        );
+        break;
+
+      case 'gumloop_discovery':
+        scraper = new GumLoopDiscoveryScraper(
+          scholarshipsTable,
+          jobsTable,
+          jobId,
+          environment
+        );
+        break;
+
       default:
         throw new Error(`Unknown website: ${website}`);
     }
@@ -72,26 +92,26 @@ async function runScraper(): Promise<void> {
     result = await scraper.scrape();
 
     if (result.success) {
-      console.log(`Scraping completed successfully for ${website}:`, {
-        totalFound: result.metadata.totalFound,
-        totalProcessed: result.metadata.totalProcessed,
-        totalInserted: result.metadata.totalInserted,
-        totalUpdated: result.metadata.totalUpdated,
-        errors: result.errors.length,
-      });
+      console.log(`Scraping completed successfully for ${website}`);
+      console.log(`Found ${result.scholarships.length} scholarships`);
+      console.log(`Inserted: ${result.metadata.totalInserted}, Updated: ${result.metadata.totalUpdated}`);
+      
+      if (result.errors.length > 0) {
+        console.warn(`Completed with ${result.errors.length} errors:`, result.errors);
+      }
     } else {
       console.error(`Scraping failed for ${website}:`, result.errors);
       process.exit(1);
     }
 
   } catch (error) {
-    console.error(`Error running scraper for ${website}:`, error);
+    console.error('Error running scraper:', error);
     process.exit(1);
   }
 }
 
 // Run the scraper
 runScraper().catch((error) => {
-  console.error('Fatal error:', error);
+  console.error('Unhandled error:', error);
   process.exit(1);
 }); 
