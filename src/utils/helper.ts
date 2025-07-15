@@ -517,6 +517,16 @@ export function truncateText(text: string, maxLength: number): string {
  */
 export function createScholarshipId(): string {
   return uuidv4();
+}
+
+/**
+ * Ensures a string value is never empty for DynamoDB GSI keys
+ * @param value - The string value to check
+ * @param defaultValue - Default value to use if empty
+ * @returns The value or default value
+ */
+export function ensureNonEmptyString(value: string | undefined | null, defaultValue: string = 'unspecified'): string {
+  return value && value.trim() !== '' ? value.trim() : defaultValue;
 } 
 
 /**

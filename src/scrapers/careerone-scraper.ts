@@ -16,7 +16,8 @@ import {
   determineTargetType,
   extractEthnicity,
   extractGender,
-  createScholarshipId
+  createScholarshipId,
+  ensureNonEmptyString
 } from '../utils/helper';
 import {
   MAX_SCHOLARSHIP_SEARCH_RESULTS,
@@ -187,9 +188,9 @@ export class CareerOneScraper extends BaseScraper {
               organization: cleanOrganization,
               academicLevel: cleanedAcademicLevel,
               geographicRestrictions: '', // CareerOneStop doesn't provide in main listing
-              targetType,
-              ethnicity: ethnicity || '',
-              gender: gender || '',
+                        targetType: (ensureNonEmptyString(targetType, 'both') as 'need' | 'merit' | 'both'),
+          ethnicity: ensureNonEmptyString(ethnicity, 'unspecified'),
+          gender: ensureNonEmptyString(gender, 'unspecified'),
               minAward: parseFloat(minAward.toString()) || 0,
               maxAward: parseFloat(maxAward.toString()) || 0,
               renewable: false, // will be updated in details

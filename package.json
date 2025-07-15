@@ -21,7 +21,8 @@
     "setup": "npm install && npm run bootstrap",
     "docker:build:dev": "./scripts/build-and-push-docker.sh dev",
     "docker:build:staging": "./scripts/build-and-push-docker.sh staging",
-    "docker:build:prod": "./scripts/build-and-push-docker.sh prod"
+    "docker:build:prod": "./scripts/build-and-push-docker.sh prod",
+    "test:careerone": "ts-node test-careerone-local.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",

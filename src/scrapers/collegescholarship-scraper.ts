@@ -16,7 +16,8 @@ import {
   determineTargetType,
   extractEthnicity,
   extractGender,
-  createScholarshipId
+  createScholarshipId,
+  ensureNonEmptyString
 } from '../utils/helper';
 import {
   MAX_SCHOLARSHIP_SEARCH_RESULTS,
@@ -213,8 +214,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
                   academicLevel: cleanedAcademicLevel,
                   geographicRestrictions: cleanGeographicRestrictions || '',
                   targetType,
-                  ethnicity: ethnicity || '',
-                  gender: gender || '',
+                                               ethnicity: ensureNonEmptyString(ethnicity, 'unspecified'),
+           gender: ensureNonEmptyString(gender, 'unspecified'),
                   minAward,
                   maxAward,
                   renewable: false,

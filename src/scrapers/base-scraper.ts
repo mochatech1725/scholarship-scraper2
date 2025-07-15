@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 import { ScraperUtils, ScrapingMetadata } from '../utils/scraper-utils';
+import { ensureNonEmptyString } from '../utils/helper';
 
 export abstract class BaseScraper implements ScraperUtils {
   protected dynamoClient: DynamoDBDocumentClient;
@@ -177,9 +178,9 @@ export abstract class BaseScraper implements ScraperUtils {
           organization: scholarship.organization || '',
           academicLevel: scholarship.academicLevel || '',
           geographicRestrictions: scholarship.geographicRestrictions || '',
-          targetType: scholarship.targetType || 'both',
-          ethnicity: scholarship.ethnicity || '',
-          gender: scholarship.gender || '',
+          targetType: (scholarship.targetType || 'both') as 'need' | 'merit' | 'both',
+          ethnicity: ensureNonEmptyString(scholarship.ethnicity, 'unspecified'),
+          gender: ensureNonEmptyString(scholarship.gender, 'unspecified'),
           minAward: scholarship.minAward || 0,
           maxAward: scholarship.maxAward || 0,
           renewable: scholarship.renewable || false,
