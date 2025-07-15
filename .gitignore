@@ -57,3 +57,13 @@ temp/
 *.tsbuildinfo 
 .env.dev
 scripts/test-system.sh
+test-careerone-docker-local.sh
+test-careerone-standalone.ts
+scripts/check-lambda-config.sh
+scripts/check-lambda-logs.sh
+scripts/check-status.sh
+scripts/test-careerone-aws.sh
+scripts/test-careerone-docker.sh
+scripts/test-careerone-local.ts
+scripts/test-lambda-direct.sh
+scripts/test-lambda-simple.sh
