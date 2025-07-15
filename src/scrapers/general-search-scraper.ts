@@ -2,9 +2,36 @@ import { BaseScraper } from './base-scraper';
 import { ScrapingResult, Scholarship } from '../utils/types';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import puppeteer from 'puppeteer';
+import { 
+  BEDROCK_MODEL_ID, 
+  MAX_SCHOLARSHIP_SEARCH_RESULTS,
+  DESCRIPTION_MAX_LENGTH,
+  ELIGIBILITY_MAX_LENGTH,
+  REQUEST_TIMEOUT_MS,
+  MAX_RETRY_ATTEMPTS,
+  AWS_BEDROCK_VERSION
+} from '../utils/constants';
+import {
+  withRetry,
+  cleanText,
+  determineTargetType,
+  extractAcademicLevel,
+  extractEthnicity,
+  extractGender,
+  createScholarshipId,
+  removeRedundantPhrases,
+  truncateText,
+  cleanAcademicLevel,
+  cleanAmount,
+  RateLimiter,
+  isTimeoutError,
+  isThrottlingError,
+  ensureNonEmptyString
+} from '../utils/helper';
 
 export class GeneralSearchScraper extends BaseScraper {
   private bedrockClient: BedrockRuntimeClient;
+  private rateLimiter: RateLimiter;
 
   constructor(
     scholarshipsTable: string,
@@ -14,10 +41,11 @@ export class GeneralSearchScraper extends BaseScraper {
   ) {
     super(scholarshipsTable, jobsTable, jobId, environment);
     this.bedrockClient = new BedrockRuntimeClient({});
+    this.rateLimiter = new RateLimiter(1); // 1 call per second
   }
 
   async scrape(): Promise<ScrapingResult> {
-    console.log('Starting general search scraping...');
+    console.log('Starting general search scraping with Bedrock...');
     
     try {
       // Update job status to running
@@ -29,40 +57,8 @@ export class GeneralSearchScraper extends BaseScraper {
         errors: [],
       });
 
-      // TODO: Implement intelligent search using Bedrock
-      // 1. Use Bedrock to generate search queries
-      // 2. Use Puppeteer to search and scrape results
-      // 3. Use Bedrock to extract and structure scholarship data
-
-      const searchTerms = [
-        'college scholarship',
-        'women\'s college scholarships',
-        'minority scholarships',
-        'LGBTQ scholarships',
-        'military scholarships',
-        'merit scholarships',
-        'need based scholarships',
-        'athletic scholarships',
-        'veteran scholarships',
-        'STEM scholarships',
-        'arts scholarships',
-        'business scholarships',
-        'engineering scholarships',
-        'healthcare scholarships',
-        'law scholarships',
-        'music scholarships',
-        'science scholarships',
-        'community service scholarships'
-      ];
-
-      const scholarships: Partial<Scholarship>[] = [];
-
-      // TODO: Implement search logic
-      // for (const term of searchTerms) {
-      //   const searchResults = await this.searchForScholarships(term);
-      //   const extractedScholarships = await this.extractScholarshipData(searchResults);
-      //   scholarships.push(...extractedScholarships);
-      // }
+      // Get scholarships using Bedrock AI
+      const scholarships = await this.getBedrockScholarships();
 
       // Process scholarships
       const { inserted, updated, errors } = await this.processScholarships(scholarships);
@@ -113,23 +109,245 @@ export class GeneralSearchScraper extends BaseScraper {
     }
   }
 
-  private async searchForScholarships(searchTerm: string): Promise<string[]> {
-    // TODO: Implement web search using Puppeteer
-    // This would search Google, Bing, or other search engines
-    // and return URLs of potential scholarship pages
-    return [];
+  private async getBedrockScholarships(): Promise<Partial<Scholarship>[]> {
+    const allScholarships: Partial<Scholarship>[] = [];
+    
+    // Get multiple search focuses for variety
+    const searchFocuses = this.getSearchFocuses();
+    const maxScholarshipsPerFocus = Math.ceil(MAX_SCHOLARSHIP_SEARCH_RESULTS / searchFocuses.length);
+    
+    console.log(`Bedrock will search for ${searchFocuses.length} different focuses, max ${maxScholarshipsPerFocus} scholarships per focus`);
+    
+    // Add overall timeout to prevent hanging
+    const overallTimeout = new Promise<Partial<Scholarship>[]>((_, reject) => {
+      setTimeout(() => reject(new Error('Bedrock function overall timeout')), 300000); // 5 minutes
+    });
+    
+    const searchPromise = this.performSearch(searchFocuses, maxScholarshipsPerFocus, allScholarships);
+    
+    try {
+      return await Promise.race([searchPromise, overallTimeout]);
+    } catch (error) {
+      console.error('Bedrock function timed out or failed:', error);
+      return allScholarships; // Return whatever we have so far
+    }
+  }
+  
+  private async performSearch(searchFocuses: string[], maxScholarshipsPerFocus: number, allScholarships: Partial<Scholarship>[]): Promise<Partial<Scholarship>[]> {
+    for (const searchFocus of searchFocuses) {
+      try {
+        const scholarships = await withRetry(async () => {
+          return await this.getScholarshipsForFocus(searchFocus, maxScholarshipsPerFocus);
+        }, MAX_RETRY_ATTEMPTS);
+        
+        allScholarships.push(...scholarships);
+        console.log(`Found ${scholarships.length} scholarships for focus: ${searchFocus}`);
+        
+        // Add a longer delay between different search focuses
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+      } catch (error) {
+        console.error(`Error getting scholarships for focus "${searchFocus}":`, error);
+        console.log(`Skipping focus "${searchFocus}" and continuing with next focus`);
+        continue; // Continue with next focus even if one fails
+      }
+    }
+
+    const uniqueScholarships = this.removeDuplicates(allScholarships);
+    const finalScholarships = uniqueScholarships.slice(0, MAX_SCHOLARSHIP_SEARCH_RESULTS);
+    
+    console.log(`Bedrock total unique scholarships found: ${finalScholarships.length}`);
+    return finalScholarships;
   }
 
-  private async extractScholarshipData(urls: string[]): Promise<Partial<Scholarship>[]> {
-    // TODO: Implement data extraction using Bedrock
-    // This would use Bedrock to intelligently extract scholarship
-    // information from web pages
-    return [];
+  private async getScholarshipsForFocus(searchFocus: string, maxResults: number): Promise<Partial<Scholarship>[]> {
+    // Wait for rate limiter before making API call
+    await this.rateLimiter.waitForNextCall();
+    
+    const userMessage = this.buildSearchPrompt(searchFocus, maxResults);
+
+    const payload = {
+      anthropic_version: AWS_BEDROCK_VERSION,
+      max_tokens: 4000,
+      temperature: 0.7,
+      messages: [
+        {
+          role: "user",
+          content: userMessage
+        }
+      ]
+    };
+
+    const command = new InvokeModelCommand({
+      modelId: BEDROCK_MODEL_ID,
+      contentType: "application/json",
+      accept: "application/json",
+      body: JSON.stringify(payload)
+    });
+
+    try {
+      console.log(`Making Bedrock API call for focus: ${searchFocus}`);
+      
+      // Add timeout to the request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), REQUEST_TIMEOUT_MS);
+      });
+      
+      const responsePromise = this.bedrockClient.send(command);
+      
+      const response = await Promise.race([responsePromise, timeoutPromise]) as any;
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      
+      const scholarshipsData = this.parseAIResponse(responseBody);
+      
+      // Convert to Scholarship format with better field mapping
+      if (Array.isArray(scholarshipsData)) {
+        return scholarshipsData.map((scholarship: any) => {
+          // Clean all text fields before creating scholarship object
+          const cleanTitle = cleanText(String(scholarship.title || scholarship.name || scholarship.scholarshipName || 'Scholarship'), { quotes: true });
+          const cleanDeadline = cleanText(String(scholarship.deadline || scholarship.applicationDeadline || 'Various deadlines'), { quotes: true });
+          const rawDescription = cleanText(String(scholarship.description || scholarship.purpose || 'No description available'), { quotes: true });
+          const cleanDescription = truncateText(removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH);
+          const cleanOrganization = cleanText(String(scholarship.organization || scholarship.sponsor || scholarship.institution || ''), { quotes: true });
+          const cleanGeographicRestrictions = cleanText(String(scholarship.geographicRestrictions || scholarship.location || scholarship.region || ''), { quotes: true });
+          const cleanMinAward = cleanAmount(String(scholarship.minAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
+          const cleanMaxAward = cleanAmount(String(scholarship.maxAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
+          const cleanRenewable = cleanText(String(scholarship.renewable || ''), { quotes: true });
+          const cleanCountry = cleanText(String(scholarship.country || scholarship.nationality || ''), { quotes: true });
+          const cleanApplyUrl = cleanText(String(scholarship.applyUrl || scholarship.applicationUrl || scholarship.url || ''), { quotes: true });
+          
+          const rawEligibility = String(scholarship.eligibility || scholarship.requirements || scholarship.qualifications || 'Eligibility requirements vary');
+          const cleanEligibility = truncateText(removeRedundantPhrases(cleanText(rawEligibility, { quotes: true })), ELIGIBILITY_MAX_LENGTH);
+          
+          const allText = `${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility} ${scholarship.academicLevel || ''} ${scholarship.levelOfStudy || ''} ${scholarship.educationLevel || ''}`;
+          const extractedAcademicLevel = extractAcademicLevel(allText);
+          const cleanedAcademicLevel = cleanAcademicLevel(extractedAcademicLevel);
+          
+          const combinedEligibility = extractedAcademicLevel 
+            ? `${cleanEligibility}${cleanEligibility ? ' | ' : ''}${extractedAcademicLevel}`
+            : cleanEligibility;
+          
+          const targetType = determineTargetType(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          
+          const ethnicity = extractEthnicity(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          const gender = extractGender(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
+          
+          return {
+            id: createScholarshipId(),
+            name: cleanTitle,
+            deadline: cleanDeadline,
+            url: scholarship.url || scholarship.website || scholarship.applicationUrl || '',
+            description: cleanDescription,
+            eligibility: combinedEligibility,
+            source: 'Bedrock AI',
+            organization: cleanOrganization,
+            academicLevel: cleanedAcademicLevel,
+            geographicRestrictions: cleanGeographicRestrictions,
+            targetType: (targetType as 'need' | 'merit' | 'both'),
+            ethnicity: ensureNonEmptyString(ethnicity, 'unspecified'),
+            gender: ensureNonEmptyString(gender, 'unspecified'),
+            minAward: parseFloat(cleanMinAward.toString()) || 0,
+            maxAward: parseFloat(cleanMaxAward.toString()) || 0,
+            renewable: cleanRenewable.toLowerCase().includes('true') || cleanRenewable.toLowerCase().includes('yes'),
+            country: cleanCountry || 'US',
+            applyUrl: cleanApplyUrl,
+            isActive: true,
+            essayRequired: false,
+            recommendationsRequired: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            jobId: this.jobId,
+          };
+        });
+      }
+      
+      return [];
+    } catch (error) {
+      // Enhanced error logging for different types of errors
+      if (error instanceof Error) {
+        if (isThrottlingError(error)) {
+          console.error(`Bedrock throttling error for focus "${searchFocus}":`, error.message);
+          console.log('This error will be handled by the retry mechanism with exponential backoff');
+        } else if (isTimeoutError(error)) {
+          console.error(`Bedrock timeout error for focus "${searchFocus}":`, error.message);
+          console.log('This error will be handled by the retry mechanism with exponential backoff');
+        } else {
+          console.error(`Bedrock API error for focus "${searchFocus}":`, error.message);
+        }
+      }
+      throw error; // Re-throw to be handled by withRetry
+    }
   }
 
-  private async useBedrockForExtraction(htmlContent: string): Promise<Partial<Scholarship>> {
-    // TODO: Implement Bedrock integration for intelligent data extraction
-    // This would send HTML content to Bedrock and get structured scholarship data back
-    return {};
+  private removeDuplicates(scholarships: Partial<Scholarship>[]): Partial<Scholarship>[] {
+    const seen = new Set<string>();
+    return scholarships.filter(scholarship => {
+      const key = `${scholarship.name?.toLowerCase()}-${scholarship.organization?.toLowerCase() || 'unknown'}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private getSearchFocuses(): string[] {
+    return [
+      'STEM scholarships for college students',
+      'minority scholarships',
+      'merit-based scholarships',
+      'need-based financial aid',
+      'graduate school scholarships',
+      'undergraduate scholarships',
+      'athletic scholarships',
+      'women scholarships',
+      'first-generation college student scholarships',
+      'community service scholarships'
+    ];
+  }
+
+  private buildSearchPrompt(searchFocus: string, maxResults: number): string {
+    console.log(`Bedrock searching for: ${searchFocus}`);
+    
+    return `Find ${maxResults} ${searchFocus}. For each scholarship, provide:
+
+- title: Scholarship name
+- organization: Sponsoring organization
+- url: Scholarship page link
+- description: Brief description (1-2 sentences)
+- minAmount: Minimum award amount
+- maxAmount: Maximum award amount
+- eligibility: Key eligibility criteria
+- academicLevel: undergraduate/graduate/doctoral
+- geographicRestrictions: Location limitations
+- deadline: Application deadline
+- renewable: true/false
+- country: Country of eligibility
+- applyUrl: Application link
+- source: Information source
+
+Focus on active, accessible scholarships with clear application processes. Return as JSON array.`;
+  }
+
+  private parseAIResponse(responseBody: any): any {
+    try {
+      // Extract the content text from the Claude 3 format
+      const content = responseBody.content?.[0]?.text || responseBody.completion || '';
+      
+      // Try to extract JSON from the response
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
+                       content.match(/\[[\s\S]*\]/) || 
+                       content.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      }
+      
+      // If no JSON found, return the raw content
+      return { rawResponse: content };
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+      return { rawResponse: responseBody.content?.[0]?.text || responseBody.completion || 'Unable to parse response' };
+    }
   }
 } 
