@@ -16,10 +16,11 @@ import {
   TextUtils, 
   ScholarshipUtils 
 } from '../utils/helper';
+import { RateLimiter } from './RateLimiter';
 
 export class GeneralSearchScraper extends BaseScraper {
   private bedrockClient: BedrockRuntimeClient;
-  private rateLimiter: InstanceType<typeof NetworkUtils.RateLimiter>;
+  private rateLimiter: RateLimiter;
 
   constructor(
     scholarshipsTable: string,
@@ -29,7 +30,7 @@ export class GeneralSearchScraper extends BaseScraper {
   ) {
     super(scholarshipsTable, jobsTable, jobId, environment);
     this.bedrockClient = new BedrockRuntimeClient({});
-    this.rateLimiter = new NetworkUtils.RateLimiter(1); // 1 call per second
+    this.rateLimiter = new RateLimiter(1); // 1 call per second
   }
 
   async scrape(): Promise<ScrapingResult> {

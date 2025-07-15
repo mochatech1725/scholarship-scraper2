@@ -14,33 +14,9 @@ export interface CleanTextOptions {
   currencySymbol?: boolean;
 }
 
-// Shared HTTP headers for web scraping
 const SCRAPING_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 };
-
-// Rate limiter for Bedrock API calls
-class RateLimiter {
-  private lastCallTime = 0;
-  private readonly minInterval: number;
-
-  constructor(callsPerSecond: number = 1) {
-    this.minInterval = 1000 / callsPerSecond; // Convert to milliseconds
-  }
-
-  async waitForNextCall(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastCall = now - this.lastCallTime;
-    
-    if (timeSinceLastCall < this.minInterval) {
-      const waitTime = this.minInterval - timeSinceLastCall;
-      console.log(`Rate limiter: waiting ${waitTime}ms before next API call`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    this.lastCallTime = Date.now();
-  }
-}
 
 function calculatePageOffset(options: PageOffsetOptions = {}): number {
   const {
@@ -128,7 +104,7 @@ function formatDeadline(deadline: string): string {
     return deadline;
   }
   
-  // Common month patterns
+  // TODO: Make this locale aware
   const monthPatterns = [
     /(january|jan)\s+(\d{1,2})/i,
     /(february|feb)\s+(\d{1,2})/i,
@@ -220,9 +196,9 @@ function cleanText(text: string | undefined | null, options: CleanTextOptions = 
   if (commas) {
     cleaned = cleaned.replace(/,/g, '');
   }
-  
+  // TODO: Use some currency library to clean the currency symbol
   if (currencySymbol) {
-    // Remove common currency symbols: $, £, €, ¥, ₹, ₽, etc.
+    // €, ¥, ₹, ₽, etc.
     cleaned = cleaned.replace(/[\$£€¥₹₽₩₪₦₨₫₱₲₴₵₸₺₻₼₽₾₿]/g, '');
   }
   
@@ -347,15 +323,12 @@ function extractAcademicLevel(text: string): string {
   if (lowerText.includes('graduate') || lowerText.includes('grad')) {
     academicKeywords.push('graduate');
   }
-  
   if (lowerText.includes('masters') || lowerText.includes('master') || lowerText.includes('ms') || lowerText.includes('ma')) {
     academicKeywords.push('masters');
   }
-  
   if (lowerText.includes('doctorate') || lowerText.includes('doctoral') || lowerText.includes('phd') || lowerText.includes('ph.d')) {
     academicKeywords.push('doctorate');
   }
-  
   if (lowerText.includes('freshman') || lowerText.includes('first year')) {
     academicKeywords.push('freshman');
   }
@@ -368,15 +341,12 @@ function extractAcademicLevel(text: string): string {
   if (lowerText.includes('senior') || lowerText.includes('fourth year')) {
     academicKeywords.push('senior');
   }
-  
   if (lowerText.includes('high school') || lowerText.includes('secondary school')) {
     academicKeywords.push('high school');
   }
-  
   if (lowerText.includes('college') && !lowerText.includes('graduate')) {
     academicKeywords.push('college');
   }
-  
   if (lowerText.includes('university') && !lowerText.includes('graduate')) {
     academicKeywords.push('university');
   }
@@ -395,32 +365,26 @@ function extractEthnicity(text: string): string {
   const lowerText = text.toLowerCase();
   const ethnicityKeywords: string[] = [];
   
-  // African American / Black
   if (lowerText.includes('african american') || lowerText.includes('black') || lowerText.includes('african-american')) {
     ethnicityKeywords.push('African American');
   }
   
-  // Hispanic / Latino
   if (lowerText.includes('hispanic') || lowerText.includes('latino') || lowerText.includes('latina') || lowerText.includes('latinx')) {
     ethnicityKeywords.push('Hispanic');
   }
   
-  // Asian
   if (lowerText.includes('asian') || lowerText.includes('asian american') || lowerText.includes('asian-american')) {
     ethnicityKeywords.push('Asian');
   }
   
-  // Native American / Indigenous
   if (lowerText.includes('native american') || lowerText.includes('indigenous') || lowerText.includes('american indian') || lowerText.includes('alaska native')) {
     ethnicityKeywords.push('Native American');
   }
   
-  // Pacific Islander
   if (lowerText.includes('pacific islander') || lowerText.includes('hawaiian') || lowerText.includes('polynesian')) {
     ethnicityKeywords.push('Pacific Islander');
   }
   
-  // White / Caucasian
   if (lowerText.includes('white') || lowerText.includes('caucasian')) {
     ethnicityKeywords.push('White');
   }
@@ -673,7 +637,6 @@ export const TextUtils = {
 
 export const NetworkUtils = {
   withRetry,
-  RateLimiter,
   isTimeoutError,
   isThrottlingError
 };
@@ -693,17 +656,11 @@ export const ScrapingUtils = {
   SCRAPING_HEADERS
 };
 
-// For backward compatibility, also export a single Helper object
 export const Helper = {
-  // Scholarship utilities
   ...ScholarshipUtils,
-  // Text utilities
   ...TextUtils,
-  // Network utilities
   ...NetworkUtils,
-  // Config utilities
   ...ConfigUtils,
-  // Scraping utilities
   ...ScrapingUtils
 };
 
