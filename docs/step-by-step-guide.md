@@ -31,10 +31,18 @@ npm run deploy:dev
 ```
 
 ### Step 2: Verify Resources Created
-- Check DynamoDB tables in AWS Console
+- Check DynamoDB tables in AWS Console:
+  - `scholarships-dev`
+  - `scholarship-scraper-jobs-dev`
+  - `scholarship-scraper-websites-dev`
 - Verify S3 bucket for raw data storage
-- Verify IAM roles and policies (including S3 permissions)
+- Verify IAM roles and policies (including S3 and DynamoDB permissions)
 - Confirm EventBridge rule exists
+
+### Step 3: Populate Websites Configuration Table
+```bash
+npm run populate:websites:dev
+```
 
 ## Phase 3: Container Development
 
@@ -46,7 +54,7 @@ docker build -t scholarship-scraper:latest .
 
 ### Step 2: Test Locally
 ```bash
-docker run -e WEBSITE=careerone -e JOB_ID=test-123 scholarship-scraper:latest
+docker run -e WEBSITE=careeronestop -e JOB_ID=test-123 scholarship-scraper:latest
 ```
 
 ### Step 3: Deploy to ECR
@@ -61,6 +69,7 @@ npm run docker:build:dev
 2. Find the JobOrchestrator function
 3. Create test event and invoke
 4. Check CloudWatch logs
+5. Verify DynamoDB websites table is being read
 
 ### Step 2: Batch Job Testing
 1. Submit manual batch job
@@ -84,6 +93,7 @@ npm run docker:build:dev
 3. Monitor DynamoDB performance
 4. Monitor S3 storage usage
 5. Track batch job success rates
+6. Monitor Container Insights V2 metrics
 
 ### Step 2: Performance Tuning
 1. Optimize DynamoDB queries
@@ -105,16 +115,21 @@ npm run deploy:prod
 - Update monitoring thresholds
 - Verify S3 bucket configuration
 
-### Step 3: Security Review
-- Audit IAM permissions (including S3)
+### Step 3: Populate Production Websites Table
+```bash
+npm run populate:websites:prod
+```
+
+### Step 4: Security Review
+- Audit IAM permissions (including S3 and DynamoDB)
 - Review VPC security groups
 - Check CloudTrail logs
 - Validate data encryption (S3 and DynamoDB)
 
 ## Completed Implementations
 
-### ✅ CareerOne Scraper
-- Direct API integration
+### ✅ CareerOneStop Scraper
+- Web crawling for CareerOneStop.org
 - Raw HTML storage in S3
 - Intelligent data parsing
 - Error handling and retry logic
@@ -137,7 +152,19 @@ npm run deploy:prod
 - Metadata tracking
 - Lifecycle management
 
+### ✅ DynamoDB Configuration Management
+- Website configurations stored in DynamoDB table
+- Runtime updates without redeployment
+- Efficient querying and filtering
+- No size limitations
+
 ## Data Flow Verification
+
+### Website Configuration (DynamoDB)
+1. Check websites table: `scholarship-scraper-websites-{env}`
+2. Verify enabled websites are being read by Lambda
+3. Test adding/updating website configurations
+4. Confirm scraper class mappings are correct
 
 ### Raw Data Storage (S3)
 1. Check S3 bucket: `scholarship-raw-data-{env}-{account}`
@@ -150,6 +177,38 @@ npm run deploy:prod
 2. Verify deduplication is working
 3. Confirm all required fields are populated
 4. Test GSI queries
+
+## Website Configuration Management
+
+### Adding New Websites
+```bash
+# Add via AWS CLI
+aws dynamodb put-item \
+  --table-name scholarship-scraper-websites-dev \
+  --item '{
+    "name": {"S": "new-website"},
+    "url": {"S": "https://example.com"},
+    "type": {"S": "crawl"},
+    "enabled": {"BOOL": true},
+    "scraperClass": {"S": "GumLoopScraper"}
+  }'
+```
+
+### Updating Website Configuration
+```bash
+# Update via AWS CLI
+aws dynamodb update-item \
+  --table-name scholarship-scraper-websites-dev \
+  --key '{"name": {"S": "careeronestop"}}' \
+  --update-expression "SET enabled = :enabled" \
+  --expression-attribute-values '{":enabled": {"BOOL": false}}'
+```
+
+### Population Script
+```bash
+# Populate table with initial configuration
+npm run populate:websites:dev
+```
 
 ## Troubleshooting Common Issues
 
@@ -182,6 +241,12 @@ npm run deploy:prod
 - Test with different user agents
 - Check S3 storage for raw error data
 
+### Website Configuration Issues
+- Verify DynamoDB table exists
+- Check Lambda has read permissions to websites table
+- Confirm website configurations are properly formatted
+- Test DynamoDB queries manually
+
 ## Cost Monitoring
 
 - Set up AWS Cost Explorer alerts
@@ -189,6 +254,7 @@ npm run deploy:prod
 - Monitor S3 storage costs and lifecycle transitions
 - Track Batch job costs
 - Review Lambda execution costs
+- Monitor Container Insights V2 costs
 
 ## Security Best Practices
 
@@ -198,6 +264,7 @@ npm run deploy:prod
 - Regular security audits
 - Implement least privilege access
 - Monitor S3 bucket access logs
+- Monitor DynamoDB table access
 
 ## Benefits of Current Implementation
 
@@ -205,6 +272,7 @@ npm run deploy:prod
 - S3 storage is ~90% cheaper than DynamoDB for raw data
 - Automatic lifecycle policies reduce long-term costs
 - Serverless architecture scales with demand
+- Pay-per-request DynamoDB billing for configuration table
 
 ### 2. Data Preservation
 - Raw HTML/JSON preserved for debugging
@@ -215,6 +283,13 @@ npm run deploy:prod
 - S3 handles unlimited raw data growth
 - DynamoDB optimized for application queries
 - Parallel processing across multiple scrapers
+- No configuration file size limitations
+
+### 4. Runtime Flexibility
+- Add/remove websites without redeployment
+- Enable/disable scrapers dynamically
+- Modify scraping parameters at runtime
+- No downtime for configuration changes
 
 ## Next Steps
 
@@ -225,6 +300,7 @@ npm run deploy:prod
 5. **Machine Learning**: Improve data extraction using S3 raw data
 6. **Athena**: SQL queries on S3 raw data
 7. **Glue**: ETL processing for raw data analytics
+8. **Web UI**: Admin interface for managing website configurations
 
 ## Success Metrics
 
@@ -234,6 +310,7 @@ npm run deploy:prod
 - Data quality score > 90%
 - Zero duplicate scholarships
 - Raw data successfully stored in S3
+- Website configuration updates take effect immediately
 
 ### Business Metrics
 - Number of scholarships found per day
@@ -241,5 +318,6 @@ npm run deploy:prod
 - Geographic distribution of scholarships
 - Cost per scholarship processed
 - Raw data storage efficiency
+- Configuration management efficiency
 
-The system is now ready for production use with a robust, scalable, and cost-effective architecture that separates raw data storage from processed data access. 
+The system is now ready for production use with a robust, scalable, and cost-effective architecture that separates raw data storage from processed data access and provides flexible runtime configuration management. 

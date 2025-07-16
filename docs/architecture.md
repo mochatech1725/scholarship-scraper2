@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Scholarship Scraper is a serverless AWS application that automatically discovers and stores college scholarship opportunities. It uses a combination of API integrations, web scraping, and AI-powered search to find scholarships from various sources. The system employs a hybrid storage approach with S3 for raw data and DynamoDB for processed scholarship information.
+The Scholarship Scraper is a serverless AWS application that automatically discovers and stores college scholarship opportunities. It uses a combination of API integrations, web scraping, and AI-powered search to find scholarships from various sources. The system employs a hybrid storage approach with S3 for raw data and DynamoDB for processed scholarship information. Website configurations are stored in a DynamoDB table for better scalability and runtime management.
 
 ## Architecture Components
 
@@ -13,22 +13,23 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
 - **DynamoDB Tables**: 
   - `scholarships-{environment}`: Stores processed scholarship data with multiple GSIs
   - `scholarship-scraper-jobs-{environment}`: Tracks scraping job metadata
-- **IAM Roles & Policies**: Secure access to AWS services including S3
-- **CloudWatch**: Logging and monitoring
+  - `scholarship-scraper-websites-{environment}`: Stores website configurations
+- **IAM Roles & Policies**: Secure access to AWS services including S3 and DynamoDB
+- **CloudWatch**: Logging and monitoring with Container Insights V2
 
 ### 2. Scheduling & Orchestration
 
 - **EventBridge**: Triggers scraping jobs every hour
-- **Lambda (Job Orchestrator)**: Coordinates batch job submissions
+- **Lambda (Job Orchestrator)**: Coordinates batch job submissions by reading from DynamoDB websites table
 - **AWS Batch**: Runs containerized scraping jobs on Fargate
 
 ### 3. Data Sources
 
 #### API Sources
-- **CareerOne**: Direct API integration
 - **CollegeScholarship**: Direct API integration
 
 #### Web Crawling
+- **CareerOneStop**: Web crawling for CareerOneStop.org
 - **GumLoop**: AI-powered web crawling for known scholarship sites
 - **GumLoop Discovery**: Intelligent discovery crawling for new opportunities
 - **General Search**: Uses Bedrock AI to intelligently search and extract data
@@ -46,7 +47,7 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
 ```
 1. EventBridge Trigger (hourly)
    ↓
-2. Lambda Job Orchestrator
+2. Lambda Job Orchestrator (reads from DynamoDB websites table)
    ↓
 3. AWS Batch Job Submission (parallel jobs per website)
    ↓
@@ -67,21 +68,18 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
 
 ## Storage Architecture
 
-### S3 Raw Data Storage
-- **Purpose**: Store raw HTML, JSON responses, and API data
-- **Organization**: `{scraper-name}/{year}/{month}/{day}/{timestamp}-{page-id}.html`
-- **Lifecycle**: Automatic transition to IA (30 days) and Glacier (90 days)
-- **Benefits**: Cost-effective storage for large raw data volumes
+### DynamoDB Tables
 
-### DynamoDB Processed Data
-- **Purpose**: Store structured, queryable scholarship information
-- **Optimized**: For fast queries and application access
-- **Indexed**: Multiple GSIs for efficient filtering
+#### Websites Configuration Table
+- **Table Name**: `scholarship-scraper-websites-{environment}`
+- **Primary Key**: `name` (string)
+- **Purpose**: Store website scraping configurations
+- **Features**: Runtime updates, no size limitations, efficient querying
+- **Schema**: Includes website type, URLs, selectors, API endpoints, etc.
 
-## Database Schema
-
-### Scholarships Table
-- **Partition Key**: `id` (MD5 hash of name + organization + deadline)
+#### Scholarships Table
+- **Table Name**: `scholarships-{environment}`
+- **Primary Key**: `id` (MD5 hash of name + organization + deadline)
 - **Sort Key**: `deadline` (ISO date string)
 - **GSIs**: 
   - DeadlineIndex: deadline + targetType
@@ -89,15 +87,22 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
   - EthnicityIndex: ethnicity + deadline
   - GenderIndex: gender + deadline
 
-### Jobs Table
-- **Partition Key**: `jobId` (UUID)
+#### Jobs Table
+- **Table Name**: `scholarship-scraper-jobs-{environment}`
+- **Primary Key**: `jobId` (UUID)
 - **Sort Key**: `startTime` (ISO date string)
+
+### S3 Raw Data Storage
+- **Purpose**: Store raw HTML, JSON responses, and API data
+- **Organization**: `{scraper-name}/{year}/{month}/{day}/{timestamp}-{page-id}.html`
+- **Lifecycle**: Automatic transition to IA (30 days) and Glacier (90 days)
+- **Benefits**: Cost-effective storage for large raw data volumes
 
 ## Raw Data Storage Structure
 
 ```
 s3://scholarship-raw-data-{env}-{account}/
-├── CareerOneScraper/
+├── CareerOneStopScraper/
 │   ├── 2024/01/15/
 │   │   ├── 2024-01-15T10-30-00-123Z-abc12345.html
 │   │   └── 2024-01-15T10-30-00-123Z-abc12345-metadata.json
@@ -110,6 +115,50 @@ s3://scholarship-raw-data-{env}-{account}/
         └── ...
 ```
 
+## Website Configuration Management
+
+### DynamoDB Table Schema
+```typescript
+interface WebsiteConfig {
+  name: string;                    // Primary key
+  url?: string;                    // Website URL
+  type: 'api' | 'crawl' | 'discovery' | 'search';
+  apiEndpoint?: string;            // For API type websites
+  apiKey?: string;                 // Environment variable name for API key
+  crawlUrl?: string;               // For crawl type websites
+  enabled: boolean;                // Whether this website is active
+  scraperClass: string;            // Scraper class to use
+  selectors?: {                    // CSS selectors for crawling
+    scholarshipLinks: string;
+    title: string;
+    amount: string;
+    deadline: string;
+    description: string;
+    organization: string;
+  };
+  discoveryConfig?: {              // For discovery type websites
+    seedUrls: string[];
+    domainFilter: string;
+    keywordFilter: string[];
+    maxDepth: number;
+    maxPages: number;
+  };
+  searchConfig?: {                 // For search type websites
+    searchTerms: string[];
+    maxResultsPerTerm: number;
+    delayBetweenRequests: number;
+  };
+  createdAt: string;               // ISO timestamp
+  updatedAt: string;               // ISO timestamp
+}
+```
+
+### Runtime Configuration Updates
+- **Add new websites**: Insert records into DynamoDB table
+- **Enable/disable websites**: Update `enabled` field
+- **Modify scraping parameters**: Update configuration fields
+- **No redeployment required**: Changes take effect immediately
+
 ## Deduplication Strategy
 
 1. **ID Generation**: MD5 hash of scholarship name + organization + deadline
@@ -121,12 +170,14 @@ s3://scholarship-raw-data-{env}-{account}/
 - **IAM Roles**: Least privilege access to S3 and DynamoDB
 - **VPC**: Private subnets for Batch jobs
 - **S3 Encryption**: Server-side encryption enabled
+- **DynamoDB Encryption**: Server-side encryption enabled
 - **Secrets**: Environment variables for API keys
 - **User Agent**: Respectful web scraping headers
 
 ## Monitoring & Observability
 
 - **CloudWatch Logs**: Application and infrastructure logs
+- **Container Insights V2**: Enhanced ECS monitoring
 - **S3 Metrics**: Storage usage and access patterns
 - **DynamoDB Metrics**: Table performance and usage
 - **Batch Job Status**: Job success/failure tracking
@@ -139,6 +190,7 @@ s3://scholarship-raw-data-{env}-{account}/
 - **DynamoDB**: On-demand billing for variable load
 - **Fargate**: Serverless container scaling
 - **Lambda**: Automatic scaling for job orchestration
+- **Website Config**: No size limitations, efficient querying
 
 ## Cost Optimization
 
@@ -147,6 +199,7 @@ s3://scholarship-raw-data-{env}-{account}/
 - **Batch**: Spot instances for cost savings
 - **Lambda**: Pay per execution
 - **EventBridge**: Minimal cost for scheduling
+- **Container Insights V2**: Lower CloudWatch costs
 
 ## Benefits of Hybrid Storage
 
@@ -155,6 +208,16 @@ s3://scholarship-raw-data-{env}-{account}/
 3. **Scalability**: S3 handles unlimited raw data growth
 4. **Flexibility**: Raw data available for reprocessing and analytics
 5. **Compliance**: Data lifecycle management with S3 policies
+6. **Configuration Management**: Runtime updates without redeployment
+
+## Benefits of DynamoDB Configuration
+
+1. **No Size Limits**: Can handle thousands of website configurations
+2. **Runtime Updates**: Enable/disable websites without redeployment
+3. **Better Performance**: Fast reads from DynamoDB vs S3 downloads
+4. **Efficient Querying**: Filter enabled websites, query by type
+5. **Scalability**: No configuration file size limitations
+6. **Cost Effective**: Pay-per-request billing for small tables
 
 ## Future Enhancements
 
@@ -164,4 +227,5 @@ s3://scholarship-raw-data-{env}-{account}/
 4. **CloudFront**: Caching for API responses
 5. **WAF**: Web application firewall for API protection
 6. **Athena**: SQL queries on S3 raw data
-7. **Glue**: ETL processing for raw data analytics 
+7. **Glue**: ETL processing for raw data analytics
+8. **Web UI**: Admin interface for managing website configurations 
