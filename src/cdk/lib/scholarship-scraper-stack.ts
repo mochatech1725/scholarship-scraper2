@@ -11,7 +11,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+
 import { ConfigUtils } from '../../utils/helper';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
@@ -25,7 +25,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private jobsTable: dynamodb.Table;
   private websitesTable: dynamodb.Table;
   private rawDataBucket: s3.Bucket;
-  private configBucket: s3.Bucket;
   private batchJobRole: iam.Role;
   private batchServiceRole: iam.Role;
   private lambdaRole: iam.Role;
@@ -48,7 +47,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.applyTags(tagsConfig, environment);
 
     this.setupS3(environment);
-    this.setupConfigBucket(environment);
     this.setupDynamoDB(environment, envConfig);
     this.setupIAMRoles();
     this.setupCompute(envConfig);
@@ -95,23 +93,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     });
   }
 
-  private setupConfigBucket(environment: string): void {
-    // S3 Bucket for configuration files
-    this.configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `scholarship-config-${environment}-${cdk.Stack.of(this).account}`,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Upload the websites.json configuration file
-    new s3deploy.BucketDeployment(this, 'WebsitesConfigDeployment', {
-      sources: [s3deploy.Source.asset('cdk/config')],
-      destinationBucket: this.configBucket,
-      destinationKeyPrefix: '',
-    });
-  }
+  // Note: Config bucket removed - configurations are now managed via DynamoDB and local files
 
   private setupDynamoDB(environment: string, envConfig: any): void {
     this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
@@ -208,8 +190,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.rawDataBucket.grantReadWrite(this.batchJobRole);
     this.rawDataBucket.grantReadWrite(this.lambdaRole);
 
-    // Grant S3 permissions for config bucket
-    this.configBucket.grantRead(this.lambdaRole);
+    // Note: Config bucket permissions removed - configurations are now managed via DynamoDB
 
     // Grant Batch permissions to Lambda role
     this.lambdaRole.addToPolicy(new iam.PolicyStatement({
