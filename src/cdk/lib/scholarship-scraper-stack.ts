@@ -352,10 +352,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
   }
 
   private setupCloudWatch(environment: string, envConfig: any): void {
-    const logGroup = new logs.LogGroup(this, 'ScraperLogGroup', {
-      logGroupName: `/aws/scholarship-scraper/${environment}`,
-      retention: logs.RetentionDays[`DAYS_${envConfig.logRetentionDays}` as keyof typeof logs.RetentionDays],
-    });
+    // Note: Lambda and Batch services create their own log groups automatically
+    // This method is kept for future custom logging configuration if needed
   }
 
   private setupOutputs(): void {
