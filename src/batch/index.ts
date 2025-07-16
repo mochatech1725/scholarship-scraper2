@@ -1,4 +1,4 @@
-import { CareerOneScraper } from '../scrapers/careerone-scraper';
+import { CareerOneStopScraper } from '../scrapers/careeronestop-scraper';
 import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scraper';
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
 import { GumLoopScraper } from '../scrapers/gumloop-scraper';
@@ -41,8 +41,8 @@ async function runScraper(): Promise<void> {
 
     // Route to the appropriate scraper based on website parameter
     switch (website.toLowerCase()) {
-      case 'careerone':
-        scraper = new CareerOneScraper(
+      case 'careeronestop':
+        scraper = new CareerOneStopScraper(
           scholarshipsTable,
           jobsTable,
           jobId,

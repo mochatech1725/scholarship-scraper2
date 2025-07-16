@@ -19,7 +19,7 @@ import {
   ELIGIBILITY_MAX_LENGTH
 } from '../utils/constants';
 
-export class CareerOneScraper extends BaseScraper {
+export class CareerOneStopScraper extends BaseScraper {
   private defaultOptions = {
     maxResults: MAX_SCHOLARSHIP_SEARCH_RESULTS,
     timeout: REQUEST_TIMEOUT_MS,
@@ -106,7 +106,7 @@ export class CareerOneScraper extends BaseScraper {
   }
 
   async scrape(): Promise<ScrapingResult> {
-    console.log('Starting CareerOne scraping...');
+    console.log('Starting CareerOneStop scraping...');
     const opts = { ...this.defaultOptions };
     let scholarships: Scholarship[] = [];
     let errors: string[] = [];
@@ -198,76 +198,90 @@ export class CareerOneScraper extends BaseScraper {
               gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
               minAward: parseFloat(minAward.toString()) || 0,
               maxAward: parseFloat(maxAward.toString()) || 0,
-              renewable: false, // will be updated in details
-              country: 'US',
+              renewable: false,
+              country: 'United States',
               applyUrl: '',
               isActive: true,
               essayRequired: false,
               recommendationsRequired: false,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
-              jobId: '',
+              jobId: this.jobId,
             };
-            if (fullUrl && fullUrl.startsWith('http')) {
+
+            // Fetch additional details if URL is available
+            if (fullUrl) {
               try {
                 const details = await this.fetchScholarshipDetails(fullUrl);
-                Object.assign(scholarship, details);
-                await new Promise(resolve => setTimeout(resolve, 500));
-              } catch (error) {
-                errors.push(`Failed to fetch details for ${title}: ${error instanceof Error ? error.message : error}`);
+                if (details.organization) {
+                  scholarship.organization = details.organization;
+                }
+                if (details.academicLevel) {
+                  scholarship.academicLevel = details.academicLevel;
+                }
+                if (details.eligibility) {
+                  scholarship.eligibility = TextUtils.truncateText(
+                    TextUtils.removeRedundantPhrases(details.eligibility), 
+                    ELIGIBILITY_MAX_LENGTH
+                  );
+                }
+                if (details.minAward && details.minAward > 0) {
+                  scholarship.minAward = details.minAward;
+                }
+                if (details.maxAward && details.maxAward > 0) {
+                  scholarship.maxAward = details.maxAward;
+                }
+                if (details.renewable !== undefined) {
+                  scholarship.renewable = details.renewable;
+                }
+                if (details.deadline) {
+                  scholarship.deadline = details.deadline;
+                }
+                if (details.geographicRestrictions) {
+                  scholarship.geographicRestrictions = details.geographicRestrictions;
+                }
+                if (details.applyUrl) {
+                  scholarship.applyUrl = details.applyUrl;
+                }
+              } catch (detailError) {
+                console.warn(`Failed to fetch details for ${fullUrl}:`, detailError);
               }
             }
+
             return scholarship;
           })();
           scholarshipPromises.push(scholarshipPromise);
         });
-        const scholarships = await Promise.all(scholarshipPromises);
-        const uniqueScholarships = scholarships.filter((scholarship, index, self) =>
-          index === self.findIndex(s => s.name === scholarship.name)
-        );
-        return uniqueScholarships.slice(0, opts.maxResults);
-      }, opts.retryAttempts || 3);
-      const { inserted, updated, errors: processErrors } = await this.processScholarships(scholarships);
-      errors = errors.concat(processErrors);
-      await this.updateJobStatus('completed', {
-        recordsFound: scholarships.length,
-        recordsProcessed: scholarships.length,
-        recordsInserted: inserted,
-        recordsUpdated: updated,
-        errors,
-      });
-      return {
-        success: true,
-        scholarships,
-        errors,
-        metadata: {
-          totalFound: scholarships.length,
-          totalProcessed: scholarships.length,
-          totalInserted: inserted,
-          totalUpdated: updated,
-        },
-      };
+        return Promise.all(scholarshipPromises);
+      }, opts.retryAttempts);
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : 'Unknown error';
-      errors.push(errMsg);
-      await this.updateJobStatus('failed', {
-        recordsFound: scholarships.length,
-        recordsProcessed: scholarships.length,
-        recordsInserted: 0,
-        recordsUpdated: 0,
-        errors,
-      });
-      return {
-        success: false,
-        scholarships: [],
-        errors,
-        metadata: {
-          totalFound: 0,
-          totalProcessed: 0,
-          totalInserted: 0,
-          totalUpdated: 0,
-        },
-      };
+      console.error('Error during CareerOneStop scraping:', error);
+      errors.push(error instanceof Error ? error.message : 'Unknown error during scraping');
     }
+
+    // Process and store scholarships
+    const processResult = await this.processScholarships(scholarships);
+    
+    const result: ScrapingResult = {
+      success: errors.length === 0,
+      scholarships,
+      errors: [...errors, ...processResult.errors],
+      metadata: {
+        totalFound: scholarships.length,
+        totalProcessed: scholarships.length,
+        totalInserted: processResult.inserted,
+        totalUpdated: processResult.updated,
+      },
+    };
+    
+    await this.updateJobStatus('completed', {
+      recordsFound: result.metadata.totalFound,
+      recordsProcessed: result.metadata.totalProcessed,
+      recordsInserted: result.metadata.totalInserted,
+      recordsUpdated: result.metadata.totalUpdated,
+      errors: result.errors,
+    });
+    
+    return result;
   }
 } 

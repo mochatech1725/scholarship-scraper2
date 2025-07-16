@@ -23,6 +23,7 @@ export interface ScholarshipScraperStackProps extends cdk.StackProps {
 export class ScholarshipScraperStack extends cdk.Stack {
   private scholarshipsTable: dynamodb.Table;
   private jobsTable: dynamodb.Table;
+  private websitesTable: dynamodb.Table;
   private rawDataBucket: s3.Bucket;
   private configBucket: s3.Bucket;
   private batchJobRole: iam.Role;
@@ -130,6 +131,14 @@ export class ScholarshipScraperStack extends cdk.Stack {
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // Websites Configuration Table
+    this.websitesTable = new dynamodb.Table(this, 'WebsitesTable', {
+      tableName: `scholarship-scraper-websites-${environment}`,
+      partitionKey: { name: 'name', type: dynamodb.AttributeType.STRING },
+      billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     this.setupScholarshipTableIndexes();
   }
 
@@ -190,8 +199,10 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // Grant DynamoDB permissions
     this.scholarshipsTable.grantReadWriteData(this.batchJobRole);
     this.jobsTable.grantReadWriteData(this.batchJobRole);
+    this.websitesTable.grantReadData(this.batchJobRole);
     this.scholarshipsTable.grantReadWriteData(this.lambdaRole);
     this.jobsTable.grantReadWriteData(this.lambdaRole);
+    this.websitesTable.grantReadData(this.lambdaRole);
 
     // Grant S3 permissions for raw data storage
     this.rawDataBucket.grantReadWrite(this.batchJobRole);
@@ -315,12 +326,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
       environment: {
         SCHOLARSHIPS_TABLE: this.scholarshipsTable.tableName,
         JOBS_TABLE: this.jobsTable.tableName,
+        WEBSITES_TABLE: this.websitesTable.tableName,
         ENVIRONMENT: environment,
         JOB_QUEUE_ARN: this.jobQueue.ref,
         JOB_DEFINITION_ARN: this.jobDefinition.ref,
         S3_RAW_DATA_BUCKET: this.rawDataBucket.bucketName,
-        CONFIG_BUCKET: this.configBucket.bucketName,
-        WEBSITES_CONFIG_KEY: 'websites.json',
       },
       timeout: cdk.Duration.minutes(5),
       bundling: {
@@ -357,6 +367,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'JobsTableName', {
       value: this.jobsTable.tableName,
       description: 'DynamoDB table for scraping jobs',
+    });
+
+    new cdk.CfnOutput(this, 'WebsitesTableName', {
+      value: this.websitesTable.tableName,
+      description: 'DynamoDB table for website configurations',
     });
 
     new cdk.CfnOutput(this, 'RawDataBucketName', {

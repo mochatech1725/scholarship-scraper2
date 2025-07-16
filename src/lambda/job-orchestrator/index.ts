@@ -1,7 +1,6 @@
 import { BatchClient, SubmitJobCommand } from '@aws-sdk/client-batch';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, ScanCommand as DocScanCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   ENVIRONMENT, 
@@ -11,7 +10,6 @@ import { ConfigUtils } from '../../utils/helper';
 
 const batchClient = new BatchClient({});
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3Client = new S3Client({});
 
 export const handler = async (event: any): Promise<any> => {
   console.log('Job orchestrator triggered:', JSON.stringify(event, null, 2));
@@ -40,28 +38,26 @@ export const handler = async (event: any): Promise<any> => {
       Item: jobRecord,
     }));
 
-    // Load website configuration from S3
-    const configBucket = process.env.CONFIG_BUCKET;
-    const configKey = process.env.WEBSITES_CONFIG_KEY;
+    // Load website configuration from DynamoDB
+    const websitesTableName = process.env.WEBSITES_TABLE;
     
-    if (!configBucket || !configKey) {
-      throw new Error('CONFIG_BUCKET or WEBSITES_CONFIG_KEY environment variables are not set');
+    if (!websitesTableName) {
+      throw new Error('WEBSITES_TABLE environment variable is not set');
     }
     
-    const getObjectCommand = new GetObjectCommand({
-      Bucket: configBucket,
-      Key: configKey,
+    const scanCommand = new DocScanCommand({
+      TableName: websitesTableName,
+      FilterExpression: '#enabled = :enabled',
+      ExpressionAttributeNames: {
+        '#enabled': 'enabled'
+      },
+      ExpressionAttributeValues: {
+        ':enabled': true
+      }
     });
     
-    const configResponse = await s3Client.send(getObjectCommand);
-    const configBody = await configResponse.Body?.transformToString();
-    
-    if (!configBody) {
-      throw new Error('Failed to read configuration from S3');
-    }
-    
-    const websitesConfig = JSON.parse(configBody);
-    const enabledWebsites = websitesConfig.websites.filter((site: any) => site.enabled);
+    const scanResponse = await dynamoClient.send(scanCommand);
+    const enabledWebsites = scanResponse.Items || [];
 
     // Submit batch job for each enabled website
     const jobPromises = enabledWebsites.map(async (website: any) => {

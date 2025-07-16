@@ -25,7 +25,7 @@ scholarship-scraper2/
 │   │       └── scholarship-scraper-stack.ts # Main infrastructure stack
 │   ├── scrapers/                 # Website-Specific Scrapers
 │   │   ├── base-scraper.ts      # Abstract base class with S3 integration
-│   │   ├── careerone-scraper.ts # CareerOne API integration
+│   │   ├── careeronestop-scraper.ts # CareerOneStop web crawling
 │   │   ├── collegescholarship-scraper.ts # CollegeScholarship API
 │   │   ├── gumloop-scraper.ts   # GumLoop web crawling for known sites
 │   │   ├── gumloop-discovery-scraper.ts # GumLoop discovery crawling
@@ -85,7 +85,7 @@ Environment-specific settings for different deployment stages:
 
 #### `websites.json`
 Configuration for different data sources:
-- **API Sources**: CareerOne, CollegeScholarship
+- **API Sources**: CollegeScholarship
 - **Crawling Sources**: GumLoop for known and discovery sites
 - **AI Sources**: General web search with Bedrock AI
 - **Scraping Settings**: Rate limits, user agents, search terms
@@ -108,7 +108,7 @@ The application uses the `ConfigLoader` utility in `src/utils/config.ts` to acce
 import { ConfigLoader } from '../utils/config';
 
 // Load website configuration
-const websiteConfig = ConfigLoader.getWebsiteConfig('careerone');
+const websiteConfig = ConfigLoader.getWebsiteConfig('careeronestop');
 
 // Load environment settings
 const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
@@ -118,7 +118,7 @@ const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
 
 ### Scrapers (`src/scrapers/`)
 - **Base Class**: Common functionality for all scrapers with S3 integration
-- **CareerOneScraper**: API integration with raw HTML storage
+- **CareerOneStopScraper**: Web crawling for CareerOneStop.org
 - **CollegeScholarshipScraper**: API integration
 - **GumLoopScraper**: AI-powered web crawling for known sites
 - **GumLoopDiscoveryScraper**: Intelligent discovery crawling

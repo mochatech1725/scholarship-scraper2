@@ -18,8 +18,6 @@ export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || '';
 
 
 // API Configuration
-export const CAREERONE_API_KEY = process.env.CAREERONE_API_KEY || '';
-export const COLLEGESCHOLARSHIP_API_KEY = process.env.COLLEGESCHOLARSHIP_API_KEY || '';
 
 // Bedrock Configuration
 export const AWS_BEDROCK_MODEL_ID = process.env.AWS_BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0';

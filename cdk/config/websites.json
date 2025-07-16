@@ -1,15 +1,6 @@
 {
   "websites": [
     {
-      "name": "careerone",
-      "url": "https://careerone.com",
-      "type": "api",
-      "apiEndpoint": "https://api.careerone.com/scholarships",
-      "apiKey": "ENV_VAR_CAREERONE_API_KEY",
-      "enabled": true,
-      "scraperClass": "CareerOneScraper"
-    },
-    {
       "name": "collegescholarship",
       "url": "https://collegescholarship.com",
       "type": "api",
