@@ -222,6 +222,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.lambdaRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
+
+    // Grant CloudWatch Logs permissions to batch job role
+    this.batchJobRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams'
+      ],
+      resources: ['*']
+    }));
   }
 
   private setupCompute(envConfig: any): void {
@@ -293,6 +305,14 @@ export class ScholarshipScraperStack extends cdk.Stack {
             value: this.rawDataBucket.bucketName,
           },
         ],
+        logConfiguration: {
+          logDriver: 'awslogs',
+          options: {
+            'awslogs-group': `/aws/batch/job`,
+            'awslogs-region': cdk.Stack.of(this).region,
+            'awslogs-stream-prefix': 'scholarship-scraper',
+          },
+        },
       },
       platformCapabilities: ['FARGATE'],
     });
