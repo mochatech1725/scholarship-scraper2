@@ -115,7 +115,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
   private setupDynamoDB(environment: string, envConfig: any): void {
     this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
-      tableName: `scholarships-${environment}`,
+      tableName: `scholarship-scholarships-${environment}`,
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
       billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -124,7 +124,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
     // Jobs Table
     this.jobsTable = new dynamodb.Table(this, 'ScrapingJobsTable', {
-      tableName: `scholarship-scraper-jobs-${environment}`,
+      tableName: `scholarship-jobs-${environment}`,
       partitionKey: { name: 'jobId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
       billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -133,7 +133,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
     // Websites Configuration Table
     this.websitesTable = new dynamodb.Table(this, 'WebsitesTable', {
-      tableName: `scholarship-scraper-websites-${environment}`,
+      tableName: `scholarship-websites-${environment}`,
       partitionKey: { name: 'name', type: dynamodb.AttributeType.STRING },
       billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
@@ -320,6 +320,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     private setupLambda(environment: string): void {
     // Lambda Function for job orchestration
     this.jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
+      functionName: `scholarship-scraper-orchestrator-${environment}`,
       entry: 'src/lambda/job-orchestrator/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,

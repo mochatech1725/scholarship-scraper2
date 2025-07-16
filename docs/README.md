@@ -80,9 +80,9 @@ npm run docker:build:dev
 ### Storage Architecture
 
 #### DynamoDB Tables
-- **`scholarships-{environment}`**: Processed scholarship data with GSIs
-- **`scholarship-scraper-jobs-{environment}`**: Job metadata and status tracking
-- **`scholarship-scraper-websites-{environment}`**: Website configurations
+- **`scholarship-scholarships-{environment}`**: Processed scholarship data with GSIs
+- **`scholarship-jobs-{environment}`**: Job metadata and status tracking
+- **`scholarship-websites-{environment}`**: Website configurations
 
 #### S3 Raw Data Storage
 - **Bucket**: `scholarship-raw-data-{environment}-{account}`
@@ -139,7 +139,7 @@ Website configurations are stored in DynamoDB for runtime updates:
 ```bash
 # Add new website
 aws dynamodb put-item \
-  --table-name scholarship-scraper-websites-dev \
+  --table-name scholarship-websites-dev \
   --item '{
     "name": {"S": "new-website"},
     "url": {"S": "https://example.com"},

@@ -7,9 +7,9 @@
 - **VPC**: Private network for Batch jobs with NAT Gateway for internet access
 - **S3 Bucket**: `scholarship-raw-data-{environment}-{account}` for storing raw scraping data
 - **DynamoDB Tables**: 
-  - `scholarships-{environment}`: Stores processed scholarship data with multiple GSIs
-  - `scholarship-scraper-jobs-{environment}`: Tracks scraping job metadata
-  - `scholarship-scraper-websites-{environment}`: Stores website configurations
+  - `scholarship-scholarships-{environment}`: Stores processed scholarship data with multiple GSIs
+  - `scholarship-jobs-{environment}`: Tracks scraping job metadata
+  - `scholarship-websites-{environment}`: Stores website configurations
 - **IAM Roles & Policies**: Secure access to AWS services including S3 and DynamoDB
 - **CloudWatch**: Logging and monitoring with Container Insights V2
 

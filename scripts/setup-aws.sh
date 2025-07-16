@@ -47,7 +47,7 @@ cat > /tmp/scholarship-scraper-policy.json << EOF
             ],
             "Resource": [
                 "arn:aws:dynamodb:${REGION}:${ACCOUNT_ID}:table/scholarships-*",
-                "arn:aws:dynamodb:${REGION}:${ACCOUNT_ID}:table/scholarship-scraper-jobs-*"
+                "arn:aws:dynamodb:${REGION}:${ACCOUNT_ID}:table/scholarship-jobs-*"
             ]
         },
         {

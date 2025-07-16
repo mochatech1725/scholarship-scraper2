@@ -7,7 +7,7 @@ import * as path from 'path';
 
 // Configuration
 const ENVIRONMENT = process.env.ENVIRONMENT || 'dev';
-const TABLE_NAME = `scholarship-scraper-websites-${ENVIRONMENT}`;
+const TABLE_NAME = `scholarship-websites-${ENVIRONMENT}`;
 
 // Initialize DynamoDB client
 const dynamoClient = new DynamoDBClient({});

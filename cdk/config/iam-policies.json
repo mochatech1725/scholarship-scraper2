@@ -11,8 +11,9 @@
         "dynamodb:Scan"
       ],
       "Resource": [
-        "arn:aws:dynamodb:*:*:table/scholarships-*",
-        "arn:aws:dynamodb:*:*:table/scholarship-scraper-jobs-*"
+        "arn:aws:dynamodb:*:*:table/scholarship-scholarships-*",
+        "arn:aws:dynamodb:*:*:table/scholarship-jobs-*",
+        "arn:aws:dynamodb:*:*:table/scholarship-websites-*"
       ]
     },
     "batchAccess": {
@@ -45,8 +46,9 @@
         "dynamodb:Scan"
       ],
       "Resource": [
-        "arn:aws:dynamodb:*:*:table/scholarships-*",
-        "arn:aws:dynamodb:*:*:table/scholarship-scraper-jobs-*"
+        "arn:aws:dynamodb:*:*:table/scholarship-scholarships-*",
+        "arn:aws:dynamodb:*:*:table/scholarship-jobs-*",
+        "arn:aws:dynamodb:*:*:table/scholarship-websites-*"
       ]
     },
     "bedrockAccess": {

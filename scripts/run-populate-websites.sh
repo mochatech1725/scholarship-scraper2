@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to populate the scholarship-scraper-websites DynamoDB table
+# Script to populate the scholarship-websites DynamoDB table
 # This script can be run multiple times safely
 
 set -e
@@ -41,7 +41,7 @@ if ! command -v ts-node &> /dev/null; then
 fi
 
 # Check if the table exists
-TABLE_NAME="scholarship-scraper-websites-${ENVIRONMENT}"
+TABLE_NAME="scholarship-websites-${ENVIRONMENT}"
 echo -e "${YELLOW}🔍 Checking if table ${TABLE_NAME} exists...${NC}"
 
 if ! aws dynamodb describe-table --table-name "$TABLE_NAME" &> /dev/null; then
