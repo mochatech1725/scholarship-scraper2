@@ -115,7 +115,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
   private setupDynamoDB(environment: string, envConfig: any): void {
     this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
-      tableName: `scholarship-scholarships-${environment}`,
+      tableName: `scholarships-${environment}`,
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
       billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
