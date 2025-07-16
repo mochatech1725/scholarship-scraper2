@@ -1,10 +1,6 @@
-# Scholarship Scraper Architecture
+# Scholarship Scraper Technical Architecture
 
-## Overview
-
-The Scholarship Scraper is a serverless AWS application that automatically discovers and stores college scholarship opportunities. It uses a combination of API integrations, web scraping, and AI-powered search to find scholarships from various sources. The system employs a hybrid storage approach with S3 for raw data and DynamoDB for processed scholarship information. Website configurations are stored in a DynamoDB table for better scalability and runtime management.
-
-## Architecture Components
+## Detailed Architecture Components
 
 ### 1. Infrastructure (CDK)
 
@@ -25,11 +21,9 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
 
 ### 3. Data Sources
 
-#### API Sources
-- **CollegeScholarship**: Direct API integration
-
 #### Web Crawling
 - **CareerOneStop**: Web crawling for CareerOneStop.org
+- **CollegeScholarship**:  Web crawling for CollegeScholarships.com
 - **GumLoop**: AI-powered web crawling for known scholarship sites
 - **GumLoop Discovery**: Intelligent discovery crawling for new opportunities
 - **General Search**: Uses Bedrock AI to intelligently search and extract data
@@ -41,62 +35,6 @@ The Scholarship Scraper is a serverless AWS application that automatically disco
 - **Deduplication**: MD5 hash-based duplicate detection
 - **Data Parsing**: Intelligent extraction of scholarship details
 - **Validation**: Ensures data quality before storage
-
-## Data Flow
-
-```
-1. EventBridge Trigger (hourly)
-   ↓
-2. Lambda Job Orchestrator (reads from DynamoDB websites table)
-   ↓
-3. AWS Batch Job Submission (parallel jobs per website)
-   ↓
-4. Container Execution (Fargate)
-   ↓
-5. Website-Specific Scraping/Crawling
-   ↓
-6. Raw Data Storage (S3)
-   ↓
-7. AI Processing & Data Extraction
-   ↓
-8. Data Processing & Deduplication
-   ↓
-9. DynamoDB Storage (processed data)
-   ↓
-10. Job Status Update
-```
-
-## Storage Architecture
-
-### DynamoDB Tables
-
-#### Websites Configuration Table
-- **Table Name**: `scholarship-scraper-websites-{environment}`
-- **Primary Key**: `name` (string)
-- **Purpose**: Store website scraping configurations
-- **Features**: Runtime updates, no size limitations, efficient querying
-- **Schema**: Includes website type, URLs, selectors, API endpoints, etc.
-
-#### Scholarships Table
-- **Table Name**: `scholarships-{environment}`
-- **Primary Key**: `id` (MD5 hash of name + organization + deadline)
-- **Sort Key**: `deadline` (ISO date string)
-- **GSIs**: 
-  - DeadlineIndex: deadline + targetType
-  - TargetTypeIndex: targetType + deadline
-  - EthnicityIndex: ethnicity + deadline
-  - GenderIndex: gender + deadline
-
-#### Jobs Table
-- **Table Name**: `scholarship-scraper-jobs-{environment}`
-- **Primary Key**: `jobId` (UUID)
-- **Sort Key**: `startTime` (ISO date string)
-
-### S3 Raw Data Storage
-- **Purpose**: Store raw HTML, JSON responses, and API data
-- **Organization**: `{scraper-name}/{year}/{month}/{day}/{timestamp}-{page-id}.html`
-- **Lifecycle**: Automatic transition to IA (30 days) and Glacier (90 days)
-- **Benefits**: Cost-effective storage for large raw data volumes
 
 ## Raw Data Storage Structure
 
@@ -116,48 +54,6 @@ s3://scholarship-raw-data-{env}-{account}/
 ```
 
 ## Website Configuration Management
-
-### DynamoDB Table Schema
-```typescript
-interface WebsiteConfig {
-  name: string;                    // Primary key
-  url?: string;                    // Website URL
-  type: 'api' | 'crawl' | 'discovery' | 'search';
-  apiEndpoint?: string;            // For API type websites
-  apiKey?: string;                 // Environment variable name for API key
-  crawlUrl?: string;               // For crawl type websites
-  enabled: boolean;                // Whether this website is active
-  scraperClass: string;            // Scraper class to use
-  selectors?: {                    // CSS selectors for crawling
-    scholarshipLinks: string;
-    title: string;
-    amount: string;
-    deadline: string;
-    description: string;
-    organization: string;
-  };
-  discoveryConfig?: {              // For discovery type websites
-    seedUrls: string[];
-    domainFilter: string;
-    keywordFilter: string[];
-    maxDepth: number;
-    maxPages: number;
-  };
-  searchConfig?: {                 // For search type websites
-    searchTerms: string[];
-    maxResultsPerTerm: number;
-    delayBetweenRequests: number;
-  };
-  createdAt: string;               // ISO timestamp
-  updatedAt: string;               // ISO timestamp
-}
-```
-
-### Runtime Configuration Updates
-- **Add new websites**: Insert records into DynamoDB table
-- **Enable/disable websites**: Update `enabled` field
-- **Modify scraping parameters**: Update configuration fields
-- **No redeployment required**: Changes take effect immediately
 
 ## Deduplication Strategy
 

@@ -19,11 +19,11 @@ The system works as follows:
 - Node.js 18+ installed
 - CDK bootstrapped in your AWS account
 
-## Step-by-Step Deployment
+## Docker-Specific Deployment
 
-### 1. Build and Push Docker Image
+### Build and Push Docker Image
 
-First, build and push the Docker image to ECR:
+The Docker image contains all scraper code and dependencies:
 
 ```bash
 # For development environment
@@ -41,28 +41,7 @@ This script will:
 - Build the Docker image with your scraper code
 - Push the image to ECR with environment-specific tags
 
-### 2. Deploy CDK Stack
-
-Deploy the CDK stack which includes:
-- DynamoDB tables for scholarships and jobs
-- IAM roles with necessary permissions
-- VPC and ECS cluster for Batch jobs
-- AWS Batch compute environment, job queue, and job definition
-- Lambda function for job orchestration
-- EventBridge rule for scheduling
-
-```bash
-# For development environment
-npm run deploy:dev
-
-# For staging environment
-npm run deploy:staging
-
-# For production environment
-npm run deploy:prod
-```
-
-### 3. Verify Deployment
+### Verify Deployment
 
 Check the CDK outputs to verify everything is deployed correctly:
 
@@ -138,7 +117,7 @@ Query the scholarships table to see scraped data:
 aws dynamodb scan --table-name ScholarshipScraperStack-dev-ScholarshipsTable
 ```
 
-## Troubleshooting
+## Docker-Specific Troubleshooting
 
 ### Common Issues
 
@@ -191,17 +170,10 @@ npm run destroy:dev
 aws ecr delete-repository --repository-name scholarship-scraper --force
 ```
 
-## Security Considerations
+## Docker Security Considerations
 
 - The Docker container runs as a non-root user
 - IAM roles follow the principle of least privilege
 - All sensitive data is stored in DynamoDB with encryption at rest
 - Network access is restricted to private subnets
-- Container images are scanned for vulnerabilities
-
-## Cost Optimization
-
-- Use Fargate Spot instances for batch jobs (configure in CDK)
-- Set appropriate timeouts for Lambda and batch jobs
-- Monitor and adjust batch job resource requirements
-- Use CloudWatch alarms to monitor costs 
+- Container images are scanned for vulnerabilities 

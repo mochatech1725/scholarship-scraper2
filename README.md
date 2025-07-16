@@ -1,75 +1,64 @@
 # Scholarship Scraper 2.0
 
-A serverless AWS application that scrapes college scholarship websites and stores data in DynamoDB.
+A serverless AWS application that automatically discovers and stores college scholarship opportunities using web scraping, API integrations, and AI-powered search.
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Configure AWS credentials
+aws configure
+
+# Setup AWS resources
+./scripts/setup-aws.sh
+
+# Deploy development environment
+npm run deploy:dev
+
+# Populate website configurations
+npm run populate:websites:dev
+```
 
 ## Architecture
 
 - **AWS CDK**: Infrastructure as Code
 - **AWS Batch with Fargate**: Containerized scraping jobs
 - **DynamoDB**: Scholarship data and job metadata storage
-- **EventBridge**: Scheduled job triggers
+- **S3**: Raw data storage with lifecycle policies
+- **EventBridge**: Scheduled job triggers (hourly)
 - **Lambda**: Job orchestration
-- **API Gateway**: Future API access
 - **CloudWatch**: Monitoring and logging
 - **Bedrock**: Intelligent search capabilities
 
-## Development Steps
+## Documentation
 
-### Phase 1: Project Setup
-1. Initialize CDK project
-2. Set up development environment
-3. Configure AWS credentials and policies
+📖 **Complete documentation is available in [docs/README.md](docs/README.md)**
 
-### Phase 2: Infrastructure Foundation
-1. Create DynamoDB tables
-2. Set up IAM roles and policies
-3. Configure CloudWatch logging
-
-### Phase 3: Core Services
-1. Implement Lambda job orchestrator
-2. Set up EventBridge scheduling
-3. Create AWS Batch compute environment
-
-### Phase 4: Scraping Logic
-1. Create base scraper framework
-2. Implement website-specific scrapers
-3. Add deduplication logic
-
-### Phase 5: Data Processing
-1. Implement scholarship data parsing
-2. Add Bedrock integration for intelligent search
-3. Create data validation and storage logic
-
-### Phase 6: Monitoring & Deployment
-1. Add CloudWatch monitoring
-2. Set up CI/CD pipeline
-3. Deploy to production
+The documentation includes:
+- Detailed architecture overview
+- Step-by-step setup instructions
+- Configuration management
+- Monitoring and troubleshooting
+- API integration guides
+- Cost optimization strategies
 
 ## Project Structure
 
 ```
 scholarship-scraper2/
 ├── cdk/                    # CDK configuration files
-│   └── config/            # CDK-specific configuration files
 ├── src/                    # Application source code
 │   ├── cdk/               # CDK infrastructure code
-│   │   ├── bin/           # CDK app entry point
-│   │   └── lib/           # CDK stack definitions
 │   ├── scrapers/          # Website-specific scrapers
 │   ├── lambda/            # Lambda functions
 │   ├── batch/             # Batch job containers
 │   └── utils/             # Shared utilities and types
 ├── scripts/               # AWS setup scripts
-└── docs/                  # Documentation
+├── docs/                  # Documentation
+└── package.json           # Project dependencies
 ```
-
-## Getting Started
-
-1. Install dependencies: `npm install`
-2. Configure environment variables: `cp env.example .env` and update values
-3. Configure AWS credentials
-4. Run setup scripts: `./scripts/setup-aws.sh`
-5. Deploy infrastructure: `npm run deploy:dev`
 
 ## Deployment
 
@@ -81,3 +70,5 @@ scholarship-scraper2/
 
 - **View Changes**: `npm run diff:dev|staging|prod`
 - **Destroy Infrastructure**: `npm run destroy:dev|staging|prod`
+- **Build Docker**: `docker build -t scholarship-scraper:latest .`
+- **Deploy to ECR**: `npm run docker:build:dev`
