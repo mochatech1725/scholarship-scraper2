@@ -3,7 +3,6 @@ import { ScrapingResult, Scholarship } from '../utils/types';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { 
   AWS_BEDROCK_MODEL_ID, 
-  MAX_SCHOLARSHIP_SEARCH_RESULTS,
   DESCRIPTION_MAX_LENGTH,
   ELIGIBILITY_MAX_LENGTH,
   AWS_BEDROCK_VERSION
@@ -49,9 +48,10 @@ export class GumLoopScraper extends BaseScraper {
     scholarshipsTable: string,
     jobsTable: string,
     jobId: string,
-    environment: string
+    environment: string,
+    rawDataBucket?: string
   ) {
-    super(scholarshipsTable, jobsTable, jobId, environment);
+    super(scholarshipsTable, jobsTable, jobId, environment, rawDataBucket);
     this.bedrockClient = new BedrockRuntimeClient({});
     this.rateLimiter = new RateLimiter(2); // 2 calls per second for GumLoop API
     
@@ -173,36 +173,52 @@ export class GumLoopScraper extends BaseScraper {
   }
 
   private async startGumLoopCrawl(website: GumLoopWebsite): Promise<{ id: string }> {
+    const requestBody = {
+      startUrl: website.crawlUrl,
+      maxPages: 50,
+      followLinks: true,
+      extractLinks: true,
+      extractText: true,
+      extractMetadata: true,
+      rateLimit: {
+        requestsPerSecond: 2,
+        maxConcurrent: 5
+      },
+      filters: {
+        allowedDomains: [new URL(website.url).hostname],
+        blockedDomains: ['facebook.com', 'twitter.com', 'linkedin.com'],
+        allowedPaths: ['/scholarship', '/financial-aid', '/grants', '/awards'],
+        blockedPaths: ['/login', '/signup', '/cart', '/checkout']
+      }
+    };
+
     const response = await fetch(`${this.gumloopBaseUrl}/crawl`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        startUrl: website.crawlUrl,
-        maxPages: 50,
-        followLinks: true,
-        extractLinks: true,
-        extractText: true,
-        extractMetadata: true,
-        rateLimit: {
-          requestsPerSecond: 2,
-          maxConcurrent: 5
-        },
-        filters: {
-          allowedDomains: [new URL(website.url).hostname],
-          blockedDomains: ['facebook.com', 'twitter.com', 'linkedin.com'],
-          allowedPaths: ['/scholarship', '/financial-aid', '/grants', '/awards'],
-          blockedPaths: ['/login', '/signup', '/cart', '/checkout']
-        }
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       throw new Error(`GumLoop API error: ${response.status} ${response.statusText}`);
     }
 
-    return await response.json();
+    const responseData = await response.json();
+    
+    // Store raw API request and response in S3
+    await this.storeRawData(
+      `${this.gumloopBaseUrl}/crawl`,
+      JSON.stringify({ request: requestBody, response: responseData }, null, 2),
+      'application/json',
+      {
+        status: 'success',
+        contentType: 'application/json',
+        size: JSON.stringify(responseData).length,
+      }
+    );
+
+    return responseData;
   }
 
   private async waitForCrawlCompletion(jobId: string): Promise<GumLoopCrawlResult[]> {
@@ -223,7 +239,21 @@ export class GumLoopScraper extends BaseScraper {
       const jobStatus = await response.json();
       
       if (jobStatus.status === 'completed') {
-        return jobStatus.results || [];
+        const results = jobStatus.results || [];
+        
+        // Store crawl results in S3
+        await this.storeRawData(
+          `${this.gumloopBaseUrl}/crawl/${jobId}`,
+          JSON.stringify({ jobId, status: jobStatus.status, results }, null, 2),
+          'application/json',
+          {
+            status: 'success',
+            contentType: 'application/json',
+            size: JSON.stringify(results).length,
+          }
+        );
+        
+        return results;
       } else if (jobStatus.status === 'failed') {
         throw new Error(`GumLoop crawl failed: ${jobStatus.error}`);
       }
@@ -241,7 +271,7 @@ export class GumLoopScraper extends BaseScraper {
     const url = result.url?.toLowerCase() || '';
     
     // Check if URL contains scholarship-related keywords
-    const scholarshipKeywords = ['scholarship', 'financial-aid', 'grant', 'award', 'fellowship'];
+    const scholarshipKeywords = ['scholarship', 'financial-aid', 'award', 'tuition assistance'];
     const hasScholarshipUrl = scholarshipKeywords.some(keyword => url.includes(keyword));
     
     // Check if content contains scholarship-related keywords

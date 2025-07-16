@@ -32,30 +32,11 @@ npm run deploy:dev
 
 ### Step 2: Verify Resources Created
 - Check DynamoDB tables in AWS Console
-- Verify IAM roles and policies
+- Verify S3 bucket for raw data storage
+- Verify IAM roles and policies (including S3 permissions)
 - Confirm EventBridge rule exists
 
-## Phase 3: Implement Scrapers
-
-### Step 1: CareerOne API Integration
-1. Get API credentials from CareerOne
-2. Update `src/scrapers/careerone-scraper.ts`
-3. Implement API call logic
-4. Transform response to Scholarship objects
-
-### Step 2: CollegeScholarship API Integration
-1. Get API credentials from CollegeScholarship
-2. Update `src/scrapers/collegescholarship-scraper.ts`
-3. Implement API call logic
-4. Transform response to Scholarship objects
-
-### Step 3: General Search Implementation
-1. Update `src/scrapers/general-search-scraper.ts`
-2. Implement Puppeteer search logic
-3. Add Bedrock integration for data extraction
-4. Test with sample websites
-
-## Phase 4: Container Development
+## Phase 3: Container Development
 
 ### Step 1: Build Docker Image
 ```bash
@@ -68,15 +49,12 @@ docker build -t scholarship-scraper:latest .
 docker run -e WEBSITE=careerone -e JOB_ID=test-123 scholarship-scraper:latest
 ```
 
-### Step 3: Push to ECR
+### Step 3: Deploy to ECR
 ```bash
-aws ecr create-repository --repository-name scholarship-scraper
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
-docker tag scholarship-scraper:latest $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/scholarship-scraper:latest
-docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/scholarship-scraper:latest
+npm run docker:build:dev
 ```
 
-## Phase 5: Testing & Validation
+## Phase 4: Testing & Validation
 
 ### Step 1: Manual Lambda Test
 1. Go to AWS Lambda Console
@@ -87,30 +65,34 @@ docker push $ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/scholarship-scraper:late
 ### Step 2: Batch Job Testing
 1. Submit manual batch job
 2. Monitor job status in AWS Batch console
-3. Check DynamoDB for results
-4. Verify job metadata
+3. Check DynamoDB for processed results
+4. Check S3 for raw data storage
+5. Verify job metadata
 
 ### Step 3: End-to-End Testing
 1. Trigger EventBridge rule manually
 2. Monitor entire pipeline
-3. Verify data quality
-4. Check deduplication logic
+3. Verify data quality in DynamoDB
+4. Verify raw data storage in S3
+5. Check deduplication logic
 
-## Phase 6: Monitoring & Optimization
+## Phase 5: Monitoring & Optimization
 
 ### Step 1: Set Up CloudWatch Dashboards
 1. Create custom metrics
 2. Set up alarms for failures
 3. Monitor DynamoDB performance
-4. Track batch job success rates
+4. Monitor S3 storage usage
+5. Track batch job success rates
 
 ### Step 2: Performance Tuning
 1. Optimize DynamoDB queries
 2. Adjust batch job timeouts
 3. Fine-tune scraping delays
-4. Monitor costs
+4. Monitor S3 lifecycle policies
+5. Monitor costs
 
-## Phase 7: Production Deployment
+## Phase 6: Production Deployment
 
 ### Step 1: Production Environment
 ```bash
@@ -118,15 +100,56 @@ npm run deploy:prod
 ```
 
 ### Step 2: Environment Variables
-- Set production API keys
+- Set production API keys (optional)
 - Configure production Bedrock model
 - Update monitoring thresholds
+- Verify S3 bucket configuration
 
 ### Step 3: Security Review
-- Audit IAM permissions
+- Audit IAM permissions (including S3)
 - Review VPC security groups
 - Check CloudTrail logs
-- Validate data encryption
+- Validate data encryption (S3 and DynamoDB)
+
+## Completed Implementations
+
+### ✅ CareerOne Scraper
+- Direct API integration
+- Raw HTML storage in S3
+- Intelligent data parsing
+- Error handling and retry logic
+
+### ✅ GumLoop Scrapers
+- Known site crawling with AI filtering
+- Discovery crawling for new opportunities
+- Raw API request/response storage
+- Intelligent content analysis
+
+### ✅ General Search Scraper
+- Bedrock AI-powered search
+- Multiple search focuses
+- Intelligent data extraction
+- Rate limiting and error handling
+
+### ✅ S3 Integration
+- Raw data storage utilities
+- Organized file structure
+- Metadata tracking
+- Lifecycle management
+
+## Data Flow Verification
+
+### Raw Data Storage (S3)
+1. Check S3 bucket: `scholarship-raw-data-{env}-{account}`
+2. Verify file structure: `{scraper-name}/{year}/{month}/{day}/`
+3. Confirm metadata files are created
+4. Test presigned URL generation
+
+### Processed Data Storage (DynamoDB)
+1. Check scholarships table for processed data
+2. Verify deduplication is working
+3. Confirm all required fields are populated
+4. Test GSI queries
 
 ## Troubleshooting Common Issues
 
@@ -140,37 +163,83 @@ npm run deploy:prod
 - Add exponential backoff
 - Optimize query patterns
 
+### S3 Access Issues
+- Check IAM roles have S3 permissions
+- Verify bucket name in environment variables
+- Test S3 utilities locally
+- Check bucket lifecycle policies
+
 ### Batch Job Failures
 - Check container logs
-- Verify environment variables
+- Verify environment variables (including S3 bucket)
 - Test Docker image locally
 - Review IAM permissions
 
 ### Scraping Errors
 - Check website availability
-- Verify API credentials
+- Verify API credentials (optional)
 - Review rate limiting
 - Test with different user agents
+- Check S3 storage for raw error data
+
+## Cost Monitoring
+
+- Set up AWS Cost Explorer alerts
+- Monitor DynamoDB read/write units
+- Monitor S3 storage costs and lifecycle transitions
+- Track Batch job costs
+- Review Lambda execution costs
+
+## Security Best Practices
+
+- Rotate API keys regularly (if using)
+- Use AWS Secrets Manager for sensitive data
+- Enable CloudTrail logging
+- Regular security audits
+- Implement least privilege access
+- Monitor S3 bucket access logs
+
+## Benefits of Current Implementation
+
+### 1. Cost Efficiency
+- S3 storage is ~90% cheaper than DynamoDB for raw data
+- Automatic lifecycle policies reduce long-term costs
+- Serverless architecture scales with demand
+
+### 2. Data Preservation
+- Raw HTML/JSON preserved for debugging
+- Historical data available for analysis
+- Easy to reprocess data if needed
+
+### 3. Scalability
+- S3 handles unlimited raw data growth
+- DynamoDB optimized for application queries
+- Parallel processing across multiple scrapers
 
 ## Next Steps
 
 1. **API Gateway**: Add REST API for querying scholarships
 2. **Advanced Search**: Implement Elasticsearch integration
 3. **Notifications**: Add SNS for job completion alerts
-4. **Analytics**: Create data analysis dashboard
-5. **Machine Learning**: Improve data extraction with Bedrock
+4. **Analytics**: Create data analysis dashboard using S3 data
+5. **Machine Learning**: Improve data extraction using S3 raw data
+6. **Athena**: SQL queries on S3 raw data
+7. **Glue**: ETL processing for raw data analytics
 
-## Cost Monitoring
+## Success Metrics
 
-- Set up AWS Cost Explorer alerts
-- Monitor DynamoDB read/write units
-- Track Batch job costs
-- Review Lambda execution costs
+### Technical Metrics
+- Successful job completion rate > 95%
+- Average job duration < 30 minutes
+- Data quality score > 90%
+- Zero duplicate scholarships
+- Raw data successfully stored in S3
 
-## Security Best Practices
+### Business Metrics
+- Number of scholarships found per day
+- Coverage of different scholarship types
+- Geographic distribution of scholarships
+- Cost per scholarship processed
+- Raw data storage efficiency
 
-- Rotate API keys regularly
-- Use AWS Secrets Manager for sensitive data
-- Enable CloudTrail logging
-- Regular security audits
-- Implement least privilege access 
+The system is now ready for production use with a robust, scalable, and cost-effective architecture that separates raw data storage from processed data access. 

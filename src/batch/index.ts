@@ -11,6 +11,7 @@ const JOB_ID = process.env.JOB_ID;
 const ENVIRONMENT = process.env.ENVIRONMENT;
 const SCHOLARSHIPS_TABLE = process.env.SCHOLARSHIPS_TABLE;
 const JOBS_TABLE = process.env.JOBS_TABLE;
+// S3_RAW_DATA_BUCKET is set by CDK stack as environment variable
 
 if (!WEBSITE || !JOB_ID || !ENVIRONMENT || !SCHOLARSHIPS_TABLE || !JOBS_TABLE) {
   console.error('Missing required environment variables:', {
@@ -29,6 +30,7 @@ const jobId = JOB_ID!;
 const environment = ENVIRONMENT!;
 const scholarshipsTable = SCHOLARSHIPS_TABLE!;
 const jobsTable = JOBS_TABLE!;
+const rawDataBucket = process.env.S3_RAW_DATA_BUCKET;
 
 async function runScraper(): Promise<void> {
   console.log(`Starting scraper for website: ${website}, job ID: ${jobId}`);
@@ -44,7 +46,8 @@ async function runScraper(): Promise<void> {
           scholarshipsTable,
           jobsTable,
           jobId,
-          environment
+          environment,
+          rawDataBucket
         );
         break;
 
@@ -53,7 +56,8 @@ async function runScraper(): Promise<void> {
           scholarshipsTable,
           jobsTable,
           jobId,
-          environment
+          environment,
+          rawDataBucket
         );
         break;
 
@@ -62,7 +66,8 @@ async function runScraper(): Promise<void> {
           scholarshipsTable,
           jobsTable,
           jobId,
-          environment
+          environment,
+          rawDataBucket
         );
         break;
 
@@ -71,7 +76,8 @@ async function runScraper(): Promise<void> {
           scholarshipsTable,
           jobsTable,
           jobId,
-          environment
+          environment,
+          rawDataBucket
         );
         break;
 
@@ -80,7 +86,8 @@ async function runScraper(): Promise<void> {
           scholarshipsTable,
           jobsTable,
           jobId,
-          environment
+          environment,
+          rawDataBucket
         );
         break;
 

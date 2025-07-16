@@ -13,6 +13,9 @@ export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || '';
 export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || '';
 
+// S3 Configuration
+// Note: S3_RAW_DATA_BUCKET is set by CDK stack as environment variable
+
 
 // API Configuration
 export const CAREERONE_API_KEY = process.env.CAREERONE_API_KEY || '';

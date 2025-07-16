@@ -1,6 +1,7 @@
 import { BatchClient, SubmitJobCommand } from '@aws-sdk/client-batch';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   ENVIRONMENT, 
@@ -10,6 +11,7 @@ import { ConfigUtils } from '../../utils/helper';
 
 const batchClient = new BatchClient({});
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3Client = new S3Client({});
 
 export const handler = async (event: any): Promise<any> => {
   console.log('Job orchestrator triggered:', JSON.stringify(event, null, 2));
@@ -38,8 +40,27 @@ export const handler = async (event: any): Promise<any> => {
       Item: jobRecord,
     }));
 
-    // Load website configuration
-    const websitesConfig = ConfigUtils.loadConfigFile('websites.json');
+    // Load website configuration from S3
+    const configBucket = process.env.CONFIG_BUCKET;
+    const configKey = process.env.WEBSITES_CONFIG_KEY;
+    
+    if (!configBucket || !configKey) {
+      throw new Error('CONFIG_BUCKET or WEBSITES_CONFIG_KEY environment variables are not set');
+    }
+    
+    const getObjectCommand = new GetObjectCommand({
+      Bucket: configBucket,
+      Key: configKey,
+    });
+    
+    const configResponse = await s3Client.send(getObjectCommand);
+    const configBody = await configResponse.Body?.transformToString();
+    
+    if (!configBody) {
+      throw new Error('Failed to read configuration from S3');
+    }
+    
+    const websitesConfig = JSON.parse(configBody);
     const enabledWebsites = websitesConfig.websites.filter((site: any) => site.enabled);
 
     // Submit batch job for each enabled website
@@ -80,6 +101,10 @@ export const handler = async (event: any): Promise<any> => {
             {
               name: 'JOBS_TABLE',
               value: process.env.JOBS_TABLE!,
+            },
+            {
+              name: 'S3_RAW_DATA_BUCKET',
+              value: process.env.S3_RAW_DATA_BUCKET!,
             },
           ],
         },

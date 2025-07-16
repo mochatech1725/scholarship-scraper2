@@ -2,7 +2,7 @@
 
 ## Overview
 
-The project has been reorganized to separate CDK-specific configuration from application source code, following AWS best practices.
+The project has been reorganized to separate CDK-specific configuration from application source code, following AWS best practices. The system now includes a hybrid storage architecture with S3 for raw data and DynamoDB for processed scholarship information.
 
 ## Directory Structure
 
@@ -24,10 +24,13 @@ scholarship-scraper2/
 │   │   └── lib/                  # CDK Stack Definitions
 │   │       └── scholarship-scraper-stack.ts # Main infrastructure stack
 │   ├── scrapers/                 # Website-Specific Scrapers
-│   │   ├── base-scraper.ts      # Abstract base class
+│   │   ├── base-scraper.ts      # Abstract base class with S3 integration
 │   │   ├── careerone-scraper.ts # CareerOne API integration
 │   │   ├── collegescholarship-scraper.ts # CollegeScholarship API
-│   │   └── general-search-scraper.ts # General web search
+│   │   ├── gumloop-scraper.ts   # GumLoop web crawling for known sites
+│   │   ├── gumloop-discovery-scraper.ts # GumLoop discovery crawling
+│   │   ├── general-search-scraper.ts # Bedrock AI-powered search
+│   │   └── RateLimiter.ts       # Rate limiting utility
 │   ├── lambda/                   # Lambda Functions
 │   │   └── job-orchestrator/     # Job orchestration Lambda
 │   │       └── index.ts
@@ -36,14 +39,18 @@ scholarship-scraper2/
 │   └── utils/                    # Shared Utilities
 │       ├── types.ts             # TypeScript type definitions
 │       ├── config.ts            # Configuration loader utility
-│       └── constants.ts         # Environment constants
+│       ├── constants.ts         # Environment constants
+│       ├── helper.ts            # Shared utility functions
+│       ├── scraper-utils.ts     # Scraping utilities
+│       └── s3-utils.ts          # S3 raw data storage utilities
 ├── scripts/                      # AWS Setup Scripts
 │   └── setup-aws.sh             # Automated AWS configuration
 ├── docs/                         # Documentation
 │   ├── architecture.md          # System architecture
 │   ├── step-by-step-guide.md    # Implementation guide
 │   ├── implementation-summary.md # Project summary
-│   └── project-structure.md     # This file
+│   ├── project-structure.md     # This file
+│   └── cdk-configuration.md     # CDK configuration guide
 ├── package.json                  # Project dependencies
 ├── tsconfig.json                # TypeScript configuration
 ├── Dockerfile                   # Container definition
@@ -79,7 +86,8 @@ Environment-specific settings for different deployment stages:
 #### `websites.json`
 Configuration for different data sources:
 - **API Sources**: CareerOne, CollegeScholarship
-- **Search Sources**: General web search with Bedrock AI
+- **Crawling Sources**: GumLoop for known and discovery sites
+- **AI Sources**: General web search with Bedrock AI
 - **Scraping Settings**: Rate limits, user agents, search terms
 
 #### `tags.json`
@@ -89,7 +97,7 @@ AWS resource tagging strategy:
 
 #### `iam-policies.json`
 IAM policy definitions for different services:
-- **Lambda Policies**: DynamoDB, Batch, Bedrock access
+- **Lambda Policies**: DynamoDB, S3, Batch, Bedrock access
 - **Batch Policies**: Container execution permissions
 
 ### Application Configuration
@@ -109,24 +117,47 @@ const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
 ## Source Code Organization
 
 ### Scrapers (`src/scrapers/`)
-- **Base Class**: Common functionality for all scrapers
-- **Website-Specific**: Individual implementations for each data source
+- **Base Class**: Common functionality for all scrapers with S3 integration
+- **CareerOneScraper**: API integration with raw HTML storage
+- **CollegeScholarshipScraper**: API integration
+- **GumLoopScraper**: AI-powered web crawling for known sites
+- **GumLoopDiscoveryScraper**: Intelligent discovery crawling
+- **GeneralSearchScraper**: Bedrock AI-powered search
+- **RateLimiter**: Utility for managing API rate limits
 - **Extensible**: Easy to add new scrapers by extending base class
 
 ### Lambda Functions (`src/lambda/`)
-- **Job Orchestrator**: Coordinates batch job submissions
+- **Job Orchestrator**: Coordinates batch job submissions with S3 configuration
 - **Event-Driven**: Triggered by EventBridge scheduling
 - **Stateless**: No persistent state, pure function
 
 ### Batch Jobs (`src/batch/`)
 - **Containerized**: Docker-based execution
 - **Scalable**: Fargate serverless containers
-- **Configurable**: Environment variables for different websites
+- **Configurable**: Environment variables for different websites and S3 bucket
 
 ### Utilities (`src/utils/`)
 - **Type Definitions**: TypeScript interfaces for all data structures
 - **Configuration**: Utility to load and access config files
+- **S3 Utilities**: Raw data storage and retrieval functions
 - **Shared Logic**: Common functions used across components
+- **Helper Functions**: Text processing, scholarship utilities, network utilities
+
+## Storage Architecture
+
+### S3 Raw Data Storage (`src/utils/s3-utils.ts`)
+- **Purpose**: Store raw HTML, JSON responses, and API data
+- **Organization**: `{scraper-name}/{year}/{month}/{day}/{timestamp}-{page-id}.html`
+- **Features**: 
+  - Metadata tracking
+  - Presigned URL generation
+  - Lifecycle management
+  - Error handling
+
+### DynamoDB Processed Data
+- **Purpose**: Store structured, queryable scholarship information
+- **Optimized**: For fast queries and application access
+- **Indexed**: Multiple GSIs for efficient filtering
 
 ## Benefits of This Structure
 
@@ -134,21 +165,30 @@ const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
 - CDK configuration separate from application code
 - Clear distinction between infrastructure and business logic
 - Environment-specific settings isolated
+- Raw data storage separate from processed data
 
 ### 2. **Maintainability**
 - Easy to add new environments (dev, staging, prod)
 - Simple to modify scraping configuration
 - Centralized IAM policy management
+- Modular scraper architecture
 
 ### 3. **Scalability**
-- Modular scraper architecture
-- Configurable resource allocation per environment
-- Easy to add new data sources
+- S3 handles unlimited raw data growth
+- DynamoDB optimized for application queries
+- Parallel processing across multiple scrapers
+- Serverless architecture scales with demand
 
 ### 4. **Security**
 - IAM policies defined as code
 - Environment-specific permissions
 - Proper resource tagging for cost tracking
+- S3 encryption and access controls
+
+### 5. **Cost Efficiency**
+- S3 storage is much cheaper than DynamoDB for raw data
+- Automatic lifecycle policies reduce long-term costs
+- Hybrid storage approach optimizes for both cost and performance
 
 ## Adding New Components
 
@@ -157,6 +197,7 @@ const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
 2. Extend `BaseScraper` class
 3. Add configuration to `cdk/config/websites.json`
 4. Update `src/batch/index.ts` switch statement
+5. Implement raw data storage using `storeRawData()` method
 
 ### New Environment
 1. Add environment config to `cdk/config/environments.json`
@@ -168,4 +209,32 @@ const envConfig = ConfigLoader.loadEnvironmentConfig('dev');
 2. Add function definition to CDK stack
 3. Configure IAM permissions in `cdk/config/iam-policies.json`
 
-This structure provides a clean, maintainable, and scalable foundation for the scholarship scraper application. 
+### New Data Source
+1. Add website configuration to `cdk/config/websites.json`
+2. Create scraper implementation in `src/scrapers/`
+3. Update batch job routing in `src/batch/index.ts`
+4. Test raw data storage in S3
+
+## Data Flow
+
+```
+1. EventBridge Trigger
+   ↓
+2. Lambda Job Orchestrator
+   ↓
+3. AWS Batch Job Submission
+   ↓
+4. Container Execution
+   ↓
+5. Website-Specific Scraping/Crawling
+   ↓
+6. Raw Data Storage (S3)
+   ↓
+7. AI Processing & Data Extraction
+   ↓
+8. Processed Data Storage (DynamoDB)
+   ↓
+9. Job Status Update
+```
+
+This structure provides a clean, maintainable, and scalable foundation for the scholarship scraper application with cost-effective raw data storage and fast application data access. 

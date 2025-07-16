@@ -22,9 +22,10 @@ export class GeneralSearchScraper extends BaseScraper {
     scholarshipsTable: string,
     jobsTable: string,
     jobId: string,
-    environment: string
+    environment: string,
+    rawDataBucket?: string
   ) {
-    super(scholarshipsTable, jobsTable, jobId, environment);
+    super(scholarshipsTable, jobsTable, jobId, environment, rawDataBucket);
     this.bedrockClient = new BedrockRuntimeClient({});
     this.rateLimiter = new RateLimiter(1); // 1 call per second
   }

@@ -10,6 +10,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import { ConfigUtils } from '../../utils/helper';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
@@ -21,6 +23,8 @@ export interface ScholarshipScraperStackProps extends cdk.StackProps {
 export class ScholarshipScraperStack extends cdk.Stack {
   private scholarshipsTable: dynamodb.Table;
   private jobsTable: dynamodb.Table;
+  private rawDataBucket: s3.Bucket;
+  private configBucket: s3.Bucket;
   private batchJobRole: iam.Role;
   private batchServiceRole: iam.Role;
   private lambdaRole: iam.Role;
@@ -42,6 +46,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
     this.applyTags(tagsConfig, environment);
 
+    this.setupS3(environment);
+    this.setupConfigBucket(environment);
     this.setupDynamoDB(environment, envConfig);
     this.setupIAMRoles();
     this.setupCompute(envConfig);
@@ -59,6 +65,50 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
     Object.entries(tagsConfig[environment]).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value as string);
+    });
+  }
+
+  private setupS3(environment: string): void {
+    // S3 Bucket for raw scraping data
+    this.rawDataBucket = new s3.Bucket(this, 'RawDataBucket', {
+      bucketName: `scholarship-raw-data-${environment}-${cdk.Stack.of(this).account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      lifecycleRules: [
+        {
+          id: 'TransitionToIA',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(90),
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  private setupConfigBucket(environment: string): void {
+    // S3 Bucket for configuration files
+    this.configBucket = new s3.Bucket(this, 'ConfigBucket', {
+      bucketName: `scholarship-config-${environment}-${cdk.Stack.of(this).account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Upload the websites.json configuration file
+    new s3deploy.BucketDeployment(this, 'WebsitesConfigDeployment', {
+      sources: [s3deploy.Source.asset('cdk/config')],
+      destinationBucket: this.configBucket,
+      destinationKeyPrefix: '',
     });
   }
 
@@ -142,6 +192,13 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.jobsTable.grantReadWriteData(this.batchJobRole);
     this.scholarshipsTable.grantReadWriteData(this.lambdaRole);
     this.jobsTable.grantReadWriteData(this.lambdaRole);
+
+    // Grant S3 permissions for raw data storage
+    this.rawDataBucket.grantReadWrite(this.batchJobRole);
+    this.rawDataBucket.grantReadWrite(this.lambdaRole);
+
+    // Grant S3 permissions for config bucket
+    this.configBucket.grantRead(this.lambdaRole);
 
     // Grant Batch permissions to Lambda role
     this.lambdaRole.addToPolicy(new iam.PolicyStatement({
@@ -239,13 +296,17 @@ export class ScholarshipScraperStack extends cdk.Stack {
             name: 'ENVIRONMENT',
             value: environment,
           },
+          {
+            name: 'S3_RAW_DATA_BUCKET',
+            value: this.rawDataBucket.bucketName,
+          },
         ],
       },
       platformCapabilities: ['FARGATE'],
     });
   }
 
-  private setupLambda(environment: string): void {
+    private setupLambda(environment: string): void {
     // Lambda Function for job orchestration
     this.jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
       entry: 'src/lambda/job-orchestrator/index.ts',
@@ -257,6 +318,9 @@ export class ScholarshipScraperStack extends cdk.Stack {
         ENVIRONMENT: environment,
         JOB_QUEUE_ARN: this.jobQueue.ref,
         JOB_DEFINITION_ARN: this.jobDefinition.ref,
+        S3_RAW_DATA_BUCKET: this.rawDataBucket.bucketName,
+        CONFIG_BUCKET: this.configBucket.bucketName,
+        WEBSITES_CONFIG_KEY: 'websites.json',
       },
       timeout: cdk.Duration.minutes(5),
       bundling: {
@@ -293,6 +357,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'JobsTableName', {
       value: this.jobsTable.tableName,
       description: 'DynamoDB table for scraping jobs',
+    });
+
+    new cdk.CfnOutput(this, 'RawDataBucketName', {
+      value: this.rawDataBucket.bucketName,
+      description: 'S3 bucket for raw scraping data',
     });
 
     new cdk.CfnOutput(this, 'JobQueueArn', {

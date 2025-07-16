@@ -4,9 +4,11 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand } from '@a
 import { createHash } from 'crypto';
 import { ScraperUtils, ScrapingMetadata } from '../utils/scraper-utils';
 import { TextUtils } from '../utils/helper';
+import { S3Utils, RawDataMetadata } from '../utils/s3-utils';
 
 export abstract class BaseScraper implements ScraperUtils {
   protected dynamoClient: DynamoDBDocumentClient;
+  protected s3Utils: S3Utils;
   protected scholarshipsTable: string;
   protected jobsTable: string;
   protected jobId: string;
@@ -16,16 +18,80 @@ export abstract class BaseScraper implements ScraperUtils {
     scholarshipsTable: string,
     jobsTable: string,
     jobId: string,
-    environment: string
+    environment: string,
+    rawDataBucket?: string
   ) {
     this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
     this.scholarshipsTable = scholarshipsTable;
     this.jobsTable = jobsTable;
     this.jobId = jobId;
     this.environment = environment;
+    
+    // Initialize S3 utils if bucket is provided
+    if (rawDataBucket) {
+      this.s3Utils = new S3Utils({ bucketName: rawDataBucket });
+    }
   }
 
   abstract scrape(): Promise<ScrapingResult>;
+
+  /**
+   * Store raw scraping data in S3
+   */
+  protected async storeRawData(
+    url: string,
+    content: string | Buffer,
+    contentType: string = 'text/html',
+    metadata?: Partial<RawDataMetadata>
+  ): Promise<string | null> {
+    if (!this.s3Utils) {
+      console.warn('S3 utils not initialized, skipping raw data storage');
+      return null;
+    }
+
+    try {
+      const scraperName = this.constructor.name;
+      const s3Key = await this.s3Utils.storeRawData(
+        scraperName,
+        url,
+        content,
+        contentType,
+        metadata
+      );
+      console.log(`Stored raw data in S3: ${s3Key}`);
+      return s3Key;
+    } catch (error) {
+      console.error('Error storing raw data in S3:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Store metadata about a scraping operation
+   */
+  protected async storeMetadata(
+    url: string,
+    metadata: RawDataMetadata
+  ): Promise<string | null> {
+    if (!this.s3Utils) {
+      console.warn('S3 utils not initialized, skipping metadata storage');
+      return null;
+    }
+
+    try {
+      const scraperName = this.constructor.name;
+      const s3Key = await this.s3Utils.storeMetadata(
+        scraperName,
+        url,
+        metadata
+      );
+      console.log(`Stored metadata in S3: ${s3Key}`);
+      return s3Key;
+    } catch (error) {
+      console.error('Error storing metadata in S3:', error);
+      return null;
+    }
+  }
 
   protected generateScholarshipId(scholarship: Partial<Scholarship>): string {
     // Create a unique ID based on name, organization, and deadline

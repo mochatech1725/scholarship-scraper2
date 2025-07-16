@@ -32,6 +32,14 @@ export class CareerOneScraper extends BaseScraper {
         headers: ScrapingUtils.SCRAPING_HEADERS,
         timeout: AXIOS_GET_TIMEOUT
       });
+      
+      // Store raw HTML in S3
+      await this.storeRawData(url, response.data, 'text/html', {
+        status: 'success',
+        contentType: 'text/html',
+        size: response.data.length,
+      });
+      
       const $ = cheerio.load(response.data);
       const details: Partial<Scholarship> = {};
       $('#scholarshipDetailContent table tr').each((i, elem) => {
@@ -118,6 +126,14 @@ export class CareerOneScraper extends BaseScraper {
           headers: ScrapingUtils.SCRAPING_HEADERS,
           timeout: opts.timeout
         });
+        
+        // Store raw HTML in S3
+        await this.storeRawData(searchUrl, response.data, 'text/html', {
+          status: 'success',
+          contentType: 'text/html',
+          size: response.data.length,
+        });
+        
         const $ = cheerio.load(response.data);
         const scholarshipPromises: Promise<Scholarship>[] = [];
         $('table tr').each((i, elem) => {

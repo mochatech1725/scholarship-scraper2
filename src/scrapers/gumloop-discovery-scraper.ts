@@ -3,7 +3,6 @@ import { ScrapingResult, Scholarship } from '../utils/types';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { 
   AWS_BEDROCK_MODEL_ID, 
-  MAX_SCHOLARSHIP_SEARCH_RESULTS,
   DESCRIPTION_MAX_LENGTH,
   ELIGIBILITY_MAX_LENGTH,
   AWS_BEDROCK_VERSION
@@ -47,9 +46,10 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
     scholarshipsTable: string,
     jobsTable: string,
     jobId: string,
-    environment: string
+    environment: string,
+    rawDataBucket?: string
   ) {
-    super(scholarshipsTable, jobsTable, jobId, environment);
+    super(scholarshipsTable, jobsTable, jobId, environment, rawDataBucket);
     this.bedrockClient = new BedrockRuntimeClient({});
     this.rateLimiter = new RateLimiter(1); // 1 call per second for discovery crawling
     
@@ -252,7 +252,7 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
     let score = 0;
     
     // Check for scholarship-related keywords in content
-    const scholarshipKeywords = ['scholarship', 'financial aid', 'grant', 'award', 'fellowship', 'tuition assistance'];
+    const scholarshipKeywords = ['scholarship', 'financial aid', 'award', 'tuition assistance'];
     const contentMatches = scholarshipKeywords.filter(keyword => content.includes(keyword)).length;
     score += contentMatches * 0.3;
     
