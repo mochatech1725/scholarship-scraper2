@@ -274,6 +274,20 @@ export class ScholarshipScraperStack extends cdk.Stack {
       allowAllOutbound: true, // Allow all outbound traffic
     });
 
+    // Add explicit outbound rule for HTTPS (needed for ECR and other AWS services)
+    this.batchSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS outbound for ECR and AWS services'
+    );
+
+    // Add explicit outbound rule for HTTP (fallback)
+    this.batchSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP outbound'
+    );
+
     // ECS Cluster for Batch
     this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
       vpc: this.vpc,
@@ -288,7 +302,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
         subnets: this.vpc.publicSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
-        securityGroupIds: [this.vpc.vpcDefaultSecurityGroup],
+        securityGroupIds: [this.batchSecurityGroup.securityGroupId], // Use dedicated security group
       },
       serviceRole: this.batchServiceRole.roleArn,
       state: 'ENABLED',
@@ -357,6 +371,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
         attemptDurationSeconds: 1800, // 30 minutes timeout
       },
       platformCapabilities: ['FARGATE'],
+      // Specify platform version to ensure compatibility with networking model
+      // Using 1.4.0 or later for the new networking model
     });
   }
 
