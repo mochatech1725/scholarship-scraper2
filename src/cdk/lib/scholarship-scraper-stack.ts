@@ -243,6 +243,23 @@ export class ScholarshipScraperStack extends cdk.Stack {
       natGateways: envConfig.natGateways,
     });
 
+    // Add ECR VPC endpoints for private subnets to access ECR without NAT Gateway
+    this.vpc.addInterfaceEndpoint('EcrDkrEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    this.vpc.addInterfaceEndpoint('EcrApiEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    // Add S3 Gateway endpoint for ECR to access S3 (for image layers)
+    this.vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+    });
+
     // ECS Cluster for Batch
     this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
       vpc: this.vpc,
@@ -313,6 +330,9 @@ export class ScholarshipScraperStack extends cdk.Stack {
             'awslogs-stream-prefix': 'scholarship-scraper',
           },
         },
+      },
+      timeout: {
+        attemptDurationSeconds: 1800, // 30 minutes timeout
       },
       platformCapabilities: ['FARGATE'],
     });

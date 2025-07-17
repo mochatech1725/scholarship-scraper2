@@ -1,9 +1,0 @@
-{
-  "ScholarshipScraperStack-dev": {
-    "ScholarshipsTableName": "scholarships-dev",
-    "JobDefinitionArn": "arn:aws:batch:us-east-1:703290033396:job-definition/ScraperJobDefinition-z0XlMFqv5pj3hKD9:2",
-    "EcrImageUri": "703290033396.dkr.ecr.us-east-1.amazonaws.com/scholarship-scraper:dev",
-    "JobsTableName": "scholarship-scraper-jobs-dev",
-    "JobQueueArn": "arn:aws:batch:us-east-1:703290033396:job-queue/ScraperJobQueue-HQSUI6PJG5jWtxbn"
-  }
-}
