@@ -287,8 +287,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
       computeResources: {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
-        subnets: this.vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
-        securityGroupIds: [this.batchSecurityGroup.securityGroupId], // Use dedicated security group
+        subnets: this.vpc.publicSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
+        securityGroupIds: [this.vpc.vpcDefaultSecurityGroup],
       },
       serviceRole: this.batchServiceRole.roleArn,
       state: 'ENABLED',

@@ -41,9 +41,9 @@ aws ecr create-repository --repository-name ${REPO_NAME} --region ${REGION}
 echo "Logging in to ECR..."
 aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin ${ECR_URI}
 
-# Build Docker image
-echo "Building Docker image..."
-docker build -t ${REPO_NAME}:latest .
+# Build Docker image for AMD64 platform
+echo "Building Docker image for AMD64 platform..."
+docker buildx build --platform linux/amd64 --load -t ${REPO_NAME}:latest .
 
 # Tag image for ECR
 echo "Tagging image for ECR..."
