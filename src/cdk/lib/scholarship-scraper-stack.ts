@@ -30,6 +30,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private lambdaRole: iam.Role;
   private vpc: ec2.Vpc;
   private cluster: ecs.Cluster;
+  private batchSecurityGroup: ec2.SecurityGroup;
   private computeEnvironment: batch.CfnComputeEnvironment;
   private jobQueue: batch.CfnJobQueue;
   private jobDefinition: batch.CfnJobDefinition;
@@ -240,24 +241,37 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // VPC for Batch jobs
     this.vpc = new ec2.Vpc(this, 'ScraperVPC', {
       maxAzs: envConfig.maxAzs,
-      natGateways: envConfig.natGateways,
+      natGateways: Math.max(1, envConfig.natGateways || 1), // Ensure at least 1 NAT gateway
     });
 
-    // Add ECR VPC endpoints for private subnets to access ECR without NAT Gateway
-    this.vpc.addInterfaceEndpoint('EcrDkrEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    // Add VPC Endpoints for ECR (Critical for private subnet ECR access)
+    this.vpc.addGatewayEndpoint('S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
     this.vpc.addInterfaceEndpoint('EcrApiEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.ECR,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
 
-    // Add S3 Gateway endpoint for ECR to access S3 (for image layers)
-    this.vpc.addGatewayEndpoint('S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+    this.vpc.addInterfaceEndpoint('EcrDkrEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+    });
+
+    // CloudWatch Logs endpoint (for batch logging)
+    this.vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+    });
+
+    // ECS endpoint (for Fargate)
+    this.vpc.addInterfaceEndpoint('EcsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.ECS,
+    });
+
+    // Create a dedicated security group for Batch
+    this.batchSecurityGroup = new ec2.SecurityGroup(this, 'BatchSecurityGroup', {
+      vpc: this.vpc,
+      description: 'Security group for Batch compute environment',
+      allowAllOutbound: true, // Allow all outbound traffic
     });
 
     // ECS Cluster for Batch
@@ -274,7 +288,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
         subnets: this.vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
-        securityGroupIds: [this.vpc.vpcDefaultSecurityGroup],
+        securityGroupIds: [this.batchSecurityGroup.securityGroupId], // Use dedicated security group
       },
       serviceRole: this.batchServiceRole.roleArn,
       state: 'ENABLED',
@@ -321,6 +335,14 @@ export class ScholarshipScraperStack extends cdk.Stack {
             name: 'S3_RAW_DATA_BUCKET',
             value: this.rawDataBucket.bucketName,
           },
+          {
+            name: 'SCHOLARSHIPS_TABLE',
+            value: this.scholarshipsTable.tableName,
+          },
+          {
+            name: 'JOBS_TABLE',
+            value: this.jobsTable.tableName,
+          },
         ],
         logConfiguration: {
           logDriver: 'awslogs',
@@ -338,7 +360,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     });
   }
 
-    private setupLambda(environment: string): void {
+  private setupLambda(environment: string): void {
     // Lambda Function for job orchestration
     this.jobOrchestrator = new NodejsFunction(this, 'JobOrchestrator', {
       functionName: `scholarship-scraper-orchestrator-${environment}`,
@@ -414,6 +436,16 @@ export class ScholarshipScraperStack extends cdk.Stack {
       description: 'Lambda function name for job orchestration',
     });
 
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID for the scraper infrastructure',
+    });
+
+    new cdk.CfnOutput(this, 'BatchSecurityGroupId', {
+      value: this.batchSecurityGroup.securityGroupId,
+      description: 'Security group ID for Batch compute environment',
+    });
+
     // ECR Image URI output
     const accountId = cdk.Stack.of(this).account;
     const region = cdk.Stack.of(this).region;
@@ -425,4 +457,4 @@ export class ScholarshipScraperStack extends cdk.Stack {
       description: 'ECR Image URI for the scraper container',
     });
   }
-} 
+}
