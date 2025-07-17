@@ -67,3 +67,5 @@ scripts/test-careerone-docker.sh
 scripts/test-careerone-local.ts
 scripts/test-lambda-direct.sh
 scripts/test-lambda-simple.sh
+response.json
+response.json
