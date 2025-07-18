@@ -71,12 +71,28 @@ export class DiscoveryCrawlScraper extends BaseScraper {
 
       // Load discovery configuration from DynamoDB
       const websites = await this.getWebsitesFromDynamoDB();
-      const discoveryConfig = websites.find(
+      const discoverySite = websites.find(
         (site: any) => site.type === 'discovery' && site.enabled
-      ) as GumLoopDiscoveryConfig;
+      );
 
-      if (!discoveryConfig) {
+      if (!discoverySite) {
         throw new Error('No discovery configuration found or enabled');
+      }
+
+      // Extract discovery configuration from the nested structure
+      const discoveryConfig: GumLoopDiscoveryConfig = {
+        name: discoverySite.name,
+        type: discoverySite.type,
+        enabled: discoverySite.enabled,
+        seedUrls: discoverySite.discoveryConfig?.seedUrls || [],
+        domainFilter: discoverySite.discoveryConfig?.domainFilter || '.edu',
+        keywordFilter: discoverySite.discoveryConfig?.keywordFilter || ['scholarship', 'financial aid', 'grant', 'award'],
+        maxDepth: discoverySite.discoveryConfig?.maxDepth || 3,
+        maxPages: discoverySite.discoveryConfig?.maxPages || 100
+      };
+
+      if (!discoveryConfig.seedUrls || discoveryConfig.seedUrls.length === 0) {
+        throw new Error('No seed URLs configured for discovery crawl');
       }
 
       // Run discovery crawling
