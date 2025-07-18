@@ -21,16 +21,37 @@ import {
 
 export class CollegeScholarshipScraper extends BaseScraper {
   private defaultOptions = {
-    maxResults: MAX_SCHOLARSHIP_SEARCH_RESULTS,
+    maxResults: Math.min(MAX_SCHOLARSHIP_SEARCH_RESULTS, 20), // Further reduce to 20 for better performance
     timeout: REQUEST_TIMEOUT_MS,
-    retryAttempts: MAX_RETRY_ATTEMPTS
+    retryAttempts: MAX_RETRY_ATTEMPTS,
+    concurrentRequests: 3, // Process 3 scholarships concurrently
+    requestDelay: 150 // Reduced delay between requests
   };
+
+  private async processScholarshipBatch(scholarshipPromises: Promise<Scholarship>[], batchSize: number = 3): Promise<Scholarship[]> {
+    const results: Scholarship[] = [];
+    
+    for (let i = 0; i < scholarshipPromises.length; i += batchSize) {
+      const batch = scholarshipPromises.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(scholarshipPromises.length / batchSize)} (${batch.length} scholarships)`);
+      
+      const batchResults = await Promise.all(batch);
+      results.push(...batchResults);
+      
+      // Small delay between batches to be respectful
+      if (i + batchSize < scholarshipPromises.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    return results;
+  }
 
   async fetchScholarshipDetails(url: string): Promise<Partial<Scholarship>> {
     try {
       const response = await axios.get(url, {
         headers: ScrapingUtils.SCRAPING_HEADERS,
-        timeout: AXIOS_GET_TIMEOUT
+        timeout: Math.min(AXIOS_GET_TIMEOUT, 10000) // Cap at 10 seconds to prevent hanging
       });
       const $ = cheerio.load(response.data);
       const details: Partial<Scholarship> = {};
@@ -108,6 +129,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
     const opts = { ...this.defaultOptions };
     let scholarships: Scholarship[] = [];
     let errors: string[] = [];
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5; // Stop if 5 consecutive errors
     
     try {
       await this.updateJobStatus('running', {
@@ -131,7 +154,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
         const $ = cheerio.load(response.data);
         const scholarshipPromises: Promise<Scholarship>[] = [];
         
-        for (let i = 0; i < $('.row').length; i++) {
+        for (let i = 0; i < $('.row').length && consecutiveErrors < maxConsecutiveErrors; i++) {
           const elem = $('.row')[i];
           const $row = $(elem);
           
@@ -176,7 +199,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
             const academicLevel = academicLevelItems.join(' | ');
             const geographicRestrictions = geographicRestrictionsItems.join(' | ');
             
-            if (title && !title.includes('Find Scholarships')) {
+            if (title && !title.includes('Find Scholarships') && scholarshipPromises.length < opts.maxResults) {
               const cleanName = TextUtils.cleanText(title, { quotes: true });
               const cleanDeadline = TextUtils.cleanText(ScholarshipUtils.formatDeadline(rawDeadline), { quotes: true });
               const rawDescription = TextUtils.cleanText(description || '', { quotes: true });
@@ -218,14 +241,21 @@ export class CollegeScholarshipScraper extends BaseScraper {
                   jobId: '',
                 };
                 
-                // Fetch detailed information if we have a valid URL
-                if (link && link.startsWith('http')) {
+                // Fetch detailed information if we have a valid URL (optimized)
+                if (link && link.startsWith('http') && consecutiveErrors < maxConsecutiveErrors) {
                   try {
                     const details = await this.fetchScholarshipDetails(link);
                     Object.assign(scholarship, details);
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    consecutiveErrors = 0; // Reset error counter on success
+                    await new Promise(resolve => setTimeout(resolve, this.defaultOptions.requestDelay));
                   } catch (error) {
-                    errors.push(`Failed to fetch details for ${title}: ${error instanceof Error ? error.message : error}`);
+                    consecutiveErrors++;
+                    console.warn(`Failed to fetch details for ${title} (error ${consecutiveErrors}/${maxConsecutiveErrors}): ${error instanceof Error ? error.message : error}`);
+                    
+                    if (consecutiveErrors >= maxConsecutiveErrors) {
+                      console.warn('Too many consecutive errors, skipping remaining detail fetches');
+                      // Continue without fetching details for this scholarship
+                    }
                   }
                 }
                 
@@ -237,7 +267,9 @@ export class CollegeScholarshipScraper extends BaseScraper {
           }
         }
         
-        const scholarships = await Promise.all(scholarshipPromises);
+        console.log(`Processing ${scholarshipPromises.length} scholarships in batches of ${this.defaultOptions.concurrentRequests}...`);
+        const scholarships = await this.processScholarshipBatch(scholarshipPromises, this.defaultOptions.concurrentRequests);
+        console.log(`Successfully processed ${scholarships.length} scholarships`);
         return scholarships.slice(0, opts.maxResults);
       }, opts.retryAttempts || 3);
 

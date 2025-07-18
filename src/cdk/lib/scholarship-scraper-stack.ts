@@ -8,8 +8,6 @@ import * as batch from 'aws-cdk-lib/aws-batch';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 
 import { ConfigUtils } from '../../utils/helper';
@@ -274,20 +272,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
       allowAllOutbound: true, // Allow all outbound traffic
     });
 
-    // Add explicit outbound rule for HTTPS (needed for ECR and other AWS services)
-    this.batchSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS outbound for ECR and AWS services'
-    );
-
-    // Add explicit outbound rule for HTTP (fallback)
-    this.batchSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP outbound'
-    );
-
     // ECS Cluster for Batch
     this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
       vpc: this.vpc,
@@ -368,7 +352,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
         },
       },
       timeout: {
-        attemptDurationSeconds: 1800, // 30 minutes timeout
+        attemptDurationSeconds: 3600, // 60 minutes timeout
       },
       platformCapabilities: ['FARGATE'],
       // Specify platform version to ensure compatibility with networking model
