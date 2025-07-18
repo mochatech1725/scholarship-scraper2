@@ -63,24 +63,6 @@ const websitesData = [
     updatedAt: new Date().toISOString()
   },
   {
-    name: 'scholarships_com',
-    url: 'https://www.scholarships.com',
-    type: 'crawl',
-    crawlUrl: 'https://www.scholarships.com/financial-aid/college-scholarships',
-    enabled: true,
-    scraperClass: 'GumLoopScraper',
-    selectors: {
-      scholarshipLinks: "a[href*='/scholarship/']",
-      title: "h1, h2, .scholarship-title",
-      amount: ".amount, .award-amount",
-      deadline: ".deadline, .due-date",
-      description: ".description, .summary",
-      organization: ".organization, .sponsor"
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
     name: 'careeronestop',
     url: 'https://www.careeronestop.org',
     type: 'crawl',

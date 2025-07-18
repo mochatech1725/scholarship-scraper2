@@ -56,7 +56,7 @@ export class GumLoopScraper extends BaseScraper {
     this.rateLimiter = new RateLimiter(2); // 2 calls per second for GumLoop API
     
     // Load GumLoop configuration
-    const gumloopConfig = ConfigUtils.loadConfigFile('websites.json').gumloopConfig;
+    const gumloopConfig = ConfigUtils.loadConfigFile('scraper-config.json').gumloopConfig;
     this.gumloopBaseUrl = gumloopConfig.baseUrl;
   }
 
@@ -72,9 +72,9 @@ export class GumLoopScraper extends BaseScraper {
         errors: [],
       });
 
-      // Load website configuration
-      const websitesConfig = ConfigUtils.loadConfigFile('websites.json');
-      const crawlWebsites = websitesConfig.websites.filter(
+      // Load website configuration from DynamoDB
+      const websites = await this.getWebsitesFromDynamoDB();
+      const crawlWebsites = websites.filter(
         (site: any) => site.type === 'crawl' && site.enabled
       ) as GumLoopWebsite[];
 

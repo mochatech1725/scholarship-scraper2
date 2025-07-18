@@ -3,6 +3,7 @@ import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scrape
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
 import { GumLoopScraper } from '../scrapers/gumloop-scraper';
 import { GumLoopDiscoveryScraper } from '../scrapers/gumloop-discovery-scraper';
+import { DiscoveryCrawlScraper } from '../scrapers/discovery-crawl-scraper';
 import { ScrapingResult } from '../utils/types';
 
 // Get environment variables
@@ -83,6 +84,16 @@ async function runScraper(): Promise<void> {
 
       case 'gumloop_discovery':
         scraper = new GumLoopDiscoveryScraper(
+          scholarshipsTable,
+          jobsTable,
+          jobId,
+          environment,
+          rawDataBucket
+        );
+        break;
+
+      case 'discovery_crawl':
+        scraper = new DiscoveryCrawlScraper(
           scholarshipsTable,
           jobsTable,
           jobId,

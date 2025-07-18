@@ -1,0 +1,36 @@
+{
+  "searchConfig": {
+    "maxResultsPerTerm": 50,
+    "delayBetweenRequests": 2000,
+    "userAgent": "Mozilla/5.0 (compatible; ScholarshipBot/1.0; +https://yourdomain.com/bot)",
+    "respectRobotsTxt": true
+  },
+  "gumloopConfig": {
+    "baseUrl": "https://api.gumloop.com",
+    "rateLimit": {
+      "requestsPerSecond": 2,
+      "maxConcurrent": 5
+    },
+    "crawlerSettings": {
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "followRedirects": true,
+      "handleJavaScript": true,
+      "extractForms": false
+    },
+    "discoverySettings": {
+      "maxDepth": 3,
+      "maxPagesPerDomain": 50,
+      "allowedDomains": [".edu", ".org", ".gov"],
+      "blockedDomains": ["facebook.com", "twitter.com", "linkedin.com"],
+      "keywordPatterns": [
+        "scholarship",
+        "financial aid", 
+        "grant",
+        "award",
+        "fellowship",
+        "tuition assistance"
+      ]
+    }
+  }
+} 

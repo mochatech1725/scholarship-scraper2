@@ -1,6 +1,6 @@
 import { Scholarship, ScrapingResult } from '../utils/types';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 import { ScraperUtils, ScrapingMetadata } from '../utils/scraper-utils';
 import { TextUtils } from '../utils/helper';
@@ -220,6 +220,33 @@ export abstract class BaseScraper implements ScraperUtils {
       essayRequired,
       recommendationsRequired,
     };
+  }
+
+  protected async getWebsitesFromDynamoDB(): Promise<any[]> {
+    try {
+      const websitesTableName = process.env.WEBSITES_TABLE;
+      
+      if (!websitesTableName) {
+        throw new Error('WEBSITES_TABLE environment variable is not set');
+      }
+      
+      const scanCommand = new ScanCommand({
+        TableName: websitesTableName,
+        FilterExpression: '#enabled = :enabled',
+        ExpressionAttributeNames: {
+          '#enabled': 'enabled'
+        },
+        ExpressionAttributeValues: {
+          ':enabled': true
+        }
+      });
+      
+      const scanResponse = await this.dynamoClient.send(scanCommand);
+      return scanResponse.Items || [];
+    } catch (error) {
+      console.error('Error getting websites from DynamoDB:', error);
+      return [];
+    }
   }
 
   protected async processScholarships(scholarships: Partial<Scholarship>[]): Promise<{

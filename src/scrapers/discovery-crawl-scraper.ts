@@ -37,7 +37,7 @@ interface GumLoopDiscoveryConfig {
   enabled: boolean;
 }
 
-export class GumLoopDiscoveryScraper extends BaseScraper {
+export class DiscoveryCrawlScraper extends BaseScraper {
   private bedrockClient: BedrockRuntimeClient;
   private rateLimiter: RateLimiter;
   private gumloopBaseUrl: string;
@@ -59,7 +59,7 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
   }
 
   async scrape(): Promise<ScrapingResult> {
-    console.log('Starting GumLoop discovery scraping for new scholarship opportunities...');
+    console.log('Starting Discovery Crawl scraping for new scholarship opportunities...');
     
     try {
       await this.updateJobStatus('running', {
@@ -113,7 +113,7 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
       };
 
     } catch (error) {
-      console.error('Error in GumLoop discovery scraper:', error);
+      console.error('Error in Discovery Crawl scraper:', error);
       
       await this.updateJobStatus('failed', {
         recordsFound: 0,
@@ -251,62 +251,41 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
     
     let score = 0;
     
-    // Check for scholarship-related keywords in content
-    const scholarshipKeywords = ['scholarship', 'financial aid', 'award', 'tuition assistance'];
-    const contentMatches = scholarshipKeywords.filter(keyword => content.includes(keyword)).length;
-    score += contentMatches * 0.3;
+    // Check for keyword matches
+    for (const keyword of config.keywordFilter) {
+      const keywordLower = keyword.toLowerCase();
+      if (content.includes(keywordLower)) score += 0.2;
+      if (url.includes(keywordLower)) score += 0.3;
+      if (title.includes(keywordLower)) score += 0.4;
+    }
     
-    // Check for keywords in URL
-    const urlMatches = scholarshipKeywords.filter(keyword => url.includes(keyword)).length;
-    score += urlMatches * 0.4;
+    // Bonus for educational domains
+    if (url.includes('.edu')) score += 0.2;
     
-    // Check for keywords in title
-    const titleMatches = scholarshipKeywords.filter(keyword => title.includes(keyword)).length;
-    score += titleMatches * 0.3;
+    // Bonus for scholarship-specific paths
+    if (url.includes('/scholarship') || url.includes('/financial-aid')) score += 0.3;
     
-    // Bonus for specific patterns
-    if (content.includes('apply') && content.includes('deadline')) score += 0.2;
-    if (content.includes('eligibility') || content.includes('requirements')) score += 0.2;
-    if (content.includes('amount') || content.includes('award')) score += 0.2;
-    
-    // Penalty for irrelevant content
-    if (content.includes('login') || content.includes('sign up')) score -= 0.3;
-    if (content.includes('shopping cart') || content.includes('checkout')) score -= 0.3;
-    
-    return Math.max(0, Math.min(1, score)); // Clamp between 0 and 1
+    return Math.min(score, 1.0);
   }
 
   private filterRelevantPages(results: GumLoopDiscoveryResult[], config: GumLoopDiscoveryConfig): GumLoopDiscoveryResult[] {
-    // Sort by relevance score and take top results
-    const sortedResults = results
-      .filter(result => result.relevanceScore >= 0.4) // Minimum relevance threshold
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, config.maxPages);
-    
-    console.log(`Filtered ${results.length} results down to ${sortedResults.length} relevant pages`);
-    
-    return sortedResults;
+    return results.filter(result => result.relevanceScore >= 0.3);
   }
 
   private async analyzeDiscoveryContent(discoveryResults: GumLoopDiscoveryResult[]): Promise<Partial<Scholarship>[]> {
+    console.log(`Analyzing ${discoveryResults.length} discovery results with AI...`);
+    
     const scholarships: Partial<Scholarship>[] = [];
     
-    // Process results in batches to avoid overwhelming Bedrock
-    const batchSize = 3; // Smaller batch size for discovery content
+    // Process in batches to avoid overwhelming the AI
+    const batchSize = 5;
     for (let i = 0; i < discoveryResults.length; i += batchSize) {
       const batch = discoveryResults.slice(i, i + batchSize);
+      const batchResults = await this.analyzeDiscoveryBatchWithAI(batch);
+      scholarships.push(...batchResults);
       
-      try {
-        const batchScholarships = await this.analyzeDiscoveryBatchWithAI(batch);
-        scholarships.push(...batchScholarships);
-        
-        // Rate limiting for AI calls
-        await this.rateLimiter.waitForNextCall();
-        
-      } catch (error) {
-        console.error(`Error analyzing discovery batch ${i / batchSize + 1}:`, error);
-        continue;
-      }
+      // Rate limiting between batches
+      await this.rateLimiter.waitForNextCall();
     }
     
     return scholarships;
@@ -322,8 +301,7 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
           scholarships.push(scholarship);
         }
       } catch (error) {
-        console.error(`Error extracting scholarship from ${result.url}:`, error);
-        continue;
+        console.error(`Error analyzing discovery result ${result.url}:`, error);
       }
     }
     
@@ -331,95 +309,59 @@ export class GumLoopDiscoveryScraper extends BaseScraper {
   }
 
   private async extractScholarshipFromDiscovery(discoveryResult: GumLoopDiscoveryResult): Promise<Partial<Scholarship> | null> {
-    const prompt = `Analyze this discovered page content and determine if it contains scholarship information. If it does, extract the details. Return only a JSON object with these fields:
-
-Content to analyze:
-${discoveryResult.content.substring(0, 3000)} // Truncated for token limits
+    const prompt = `Extract scholarship information from the following webpage content. If this is not a scholarship page, return null.
 
 URL: ${discoveryResult.url}
 Title: ${discoveryResult.title}
-Relevance Score: ${discoveryResult.relevanceScore}
+Content: ${discoveryResult.content.substring(0, 2000)}
 
-Extract and return JSON with these fields:
-{
-  "title": "Scholarship name",
-  "organization": "Sponsoring organization",
-  "amount": "Award amount (number or range)",
-  "deadline": "Application deadline",
-  "description": "Brief description",
-  "eligibility": "Key eligibility criteria",
-  "academicLevel": "undergraduate/graduate/doctoral",
-  "targetType": "merit/need/both",
-  "ethnicity": "specific ethnicity if mentioned",
-  "gender": "specific gender if mentioned",
-  "geographicRestrictions": "location limitations",
-  "renewable": true/false,
-  "country": "country of eligibility"
-}
+Extract the following fields if available:
+- name: Scholarship name
+- description: Brief description (max ${DESCRIPTION_MAX_LENGTH} characters)
+- eligibility: Eligibility requirements (max ${ELIGIBILITY_MAX_LENGTH} characters)
+- organization: Organization offering the scholarship
+- deadline: Application deadline (ISO date format)
+- minAward: Minimum award amount (number)
+- maxAward: Maximum award amount (number)
+- applyUrl: URL to apply
+- academicLevel: Undergraduate, Graduate, etc.
+- targetType: need, merit, or both
 
-If no scholarship information is found, return null.`;
-
-    const payload = {
-      anthropic_version: AWS_BEDROCK_VERSION,
-      max_tokens: 1000,
-      temperature: 0.1, // Lower temperature for more consistent extraction
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
-    };
-
-    const command = new InvokeModelCommand({
-      modelId: AWS_BEDROCK_MODEL_ID,
-      contentType: "application/json",
-      accept: "application/json",
-      body: JSON.stringify(payload)
-    });
+Return as JSON object or null if not a scholarship page.`;
 
     try {
-      const response = await this.bedrockClient.send(command);
+      const response = await this.bedrockClient.send(new InvokeModelCommand({
+        modelId: AWS_BEDROCK_MODEL_ID,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({
+          prompt: prompt,
+          max_tokens: 1000,
+          temperature: 0.1,
+          top_p: 0.9,
+        }),
+      }));
+
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-      const content = responseBody.content?.[0]?.text || '';
+      const extractedText = responseBody.completions[0].text.trim();
       
-      // Extract JSON from response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return null;
+      if (extractedText.toLowerCase().includes('null')) {
+        return null;
+      }
       
-      const extractedData = JSON.parse(jsonMatch[0]);
+      const scholarshipData = JSON.parse(extractedText);
       
-      // Transform to Scholarship format
-      const scholarship: Partial<Scholarship> = {
-        id: ScholarshipUtils.createScholarshipId(),
-        name: TextUtils.cleanText(extractedData.title || '', { quotes: true }),
-        deadline: TextUtils.cleanText(extractedData.deadline || '', { quotes: true }),
+      return {
+        ...scholarshipData,
+        source: 'discovery_crawl',
+        jobId: this.jobId,
         url: discoveryResult.url,
-        description: TextUtils.truncateText(TextUtils.cleanText(extractedData.description || '', { quotes: true }), DESCRIPTION_MAX_LENGTH),
-        eligibility: TextUtils.truncateText(TextUtils.cleanText(extractedData.eligibility || '', { quotes: true }), ELIGIBILITY_MAX_LENGTH),
-        source: 'GumLoop Discovery',
-        organization: TextUtils.cleanText(extractedData.organization || '', { quotes: true }),
-        academicLevel: ScholarshipUtils.cleanAcademicLevel(extractedData.academicLevel || '') || '',
-        geographicRestrictions: TextUtils.cleanText(extractedData.geographicRestrictions || '', { quotes: true }),
-        targetType: (extractedData.targetType as 'need' | 'merit' | 'both') || 'both',
-        ethnicity: TextUtils.ensureNonEmptyString(extractedData.ethnicity, 'unspecified'),
-        gender: TextUtils.ensureNonEmptyString(extractedData.gender, 'unspecified'),
-        minAward: parseFloat(ScholarshipUtils.cleanAmount(extractedData.amount || '0')) || 0,
-        maxAward: parseFloat(ScholarshipUtils.cleanAmount(extractedData.amount || '0')) || 0,
-        renewable: extractedData.renewable || false,
-        country: extractedData.country || 'US',
-        isActive: true,
-        essayRequired: false,
-        recommendationsRequired: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        jobId: this.jobId,
       };
       
-      return scholarship;
-      
     } catch (error) {
-      console.error('Error in AI extraction from discovery:', error);
+      console.error('Error extracting scholarship from discovery result:', error);
       return null;
     }
   }

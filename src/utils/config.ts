@@ -45,10 +45,12 @@ export class ConfigLoader {
     return config[environment];
   }
 
-  static loadWebsitesConfig(): ScrapingConfig {
-    const configPath = path.join(this.configPath, 'websites.json');
+  static loadScraperConfig(): any {
+    const configPath = path.join(this.configPath, 'scraper-config.json');
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
+
+
 
   static loadTagsConfig(): any {
     const configPath = path.join(this.configPath, 'tags.json');
@@ -60,13 +62,10 @@ export class ConfigLoader {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
 
-  static getWebsiteConfig(websiteName: string): WebsiteConfig | undefined {
-    const config = this.loadWebsitesConfig();
-    return config.websites.find(w => w.name === websiteName);
-  }
+
 
   static getSearchConfig(): SearchConfig {
-    const config = this.loadWebsitesConfig();
+    const config = this.loadScraperConfig();
     return config.searchConfig;
   }
 } 
