@@ -27,42 +27,6 @@ const websitesData = [
     updatedAt: new Date().toISOString()
   },
   {
-    name: 'bold_org',
-    url: 'https://bold.org',
-    type: 'crawl',
-    crawlUrl: 'https://bold.org/scholarships',
-    enabled: true,
-    scraperClass: 'GumLoopScraper',
-    selectors: {
-      scholarshipLinks: "a[href*='/scholarship/']",
-      title: "h1, h2, .scholarship-title",
-      amount: ".amount, .award-amount, [data-testid='amount']",
-      deadline: ".deadline, .due-date, [data-testid='deadline']",
-      description: ".description, .summary, [data-testid='description']",
-      organization: ".organization, .sponsor, [data-testid='organization']"
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    name: 'fastweb',
-    url: 'https://www.fastweb.com',
-    type: 'crawl',
-    crawlUrl: 'https://www.fastweb.com/college-scholarships',
-    enabled: true,
-    scraperClass: 'GumLoopScraper',
-    selectors: {
-      scholarshipLinks: "a[href*='/scholarship/']",
-      title: "h1, h2, .scholarship-title",
-      amount: ".amount, .award-amount",
-      deadline: ".deadline, .due-date",
-      description: ".description, .summary",
-      organization: ".organization, .sponsor"
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
     name: 'careeronestop',
     url: 'https://www.careeronestop.org',
     type: 'crawl',
