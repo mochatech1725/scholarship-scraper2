@@ -52,22 +52,39 @@ const websitesData = [
     updatedAt: new Date().toISOString()
   },
   {
-    name: 'discovery_crawl',
-    type: 'discovery',
+    name: 'college_scholarship_search',
+    type: 'search',
     enabled: true,
-    scraperClass: 'GumLoopDiscoveryScraper',
-    discoveryConfig: {
-      seedUrls: [
-        'https://college.harvard.edu/financial-aid',
-        'https://financialaid.stanford.edu',
-        'https://sfs.mit.edu',
-        'https://finaid.yale.edu',
-        'https://admission.princeton.edu/cost-aid'
+    scraperClass: 'GeneralSearchScraper',
+    searchConfig: {
+      searchTerms: [
+        'college scholarships 2025',
+        'university scholarships for students',
+        'undergraduate scholarship opportunities',
+        'merit-based college scholarships',
+        'need-based financial aid scholarships',
+        'academic excellence scholarships',
+        'first-generation college student scholarships',
+        'minority student scholarships',
+        'women in STEM scholarships',
+        'engineering student scholarships',
+        'business student scholarships',
+        'arts and humanities scholarships',
+        'community service scholarships',
+        'leadership scholarships for college',
+        'athletic scholarships for college students',
+        'international student scholarships USA',
+        'transfer student scholarships',
+        'graduate school scholarships',
+        'PhD funding opportunities',
+        'fellowship programs for students'
       ],
-      domainFilter: '.edu',
-      keywordFilter: ['scholarship', 'financial aid', 'grant', 'award'],
-      maxDepth: 3,
-      maxPages: 100
+      maxResultsPerTerm: 30,
+      delayBetweenRequests: 3000,
+      searchEngine: 'google',
+      includeNews: false,
+      includeForums: false,
+      dateRange: 'past_year'
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -79,17 +96,23 @@ const websitesData = [
     scraperClass: 'GeneralSearchScraper',
     searchConfig: {
       searchTerms: [
-        'college scholarships',
-        'university financial aid',
-        'student grants',
-        'academic awards',
-        'merit scholarships',
-        'need-based aid',
-        'undergraduate scholarships',
-        'graduate fellowships'
+        'scholarship opportunities 2025',
+        'student financial aid programs',
+        'academic scholarship programs',
+        'merit-based financial aid',
+        'need-based scholarship programs',
+        'undergraduate funding opportunities',
+        'graduate student funding',
+        'fellowship opportunities',
+        'research grant opportunities',
+        'academic excellence awards'
       ],
-      maxResultsPerTerm: 50,
-      delayBetweenRequests: 2000
+      maxResultsPerTerm: 25,
+      delayBetweenRequests: 2500,
+      searchEngine: 'google',
+      includeNews: false,
+      includeForums: false,
+      dateRange: 'past_year'
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()

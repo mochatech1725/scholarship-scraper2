@@ -2,8 +2,6 @@ import { CareerOneStopScraper } from '../scrapers/careeronestop-scraper';
 import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scraper';
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
 import { GumLoopScraper } from '../scrapers/gumloop-scraper';
-import { GumLoopDiscoveryScraper } from '../scrapers/gumloop-discovery-scraper';
-import { DiscoveryCrawlScraper } from '../scrapers/discovery-crawl-scraper';
 import { ScrapingResult } from '../utils/types';
 
 const WEBSITE = process.env.WEBSITE;
@@ -80,18 +78,8 @@ async function runScraper(): Promise<void> {
         );
         break;
 
-      case 'gumloop_discovery':
-        scraper = new GumLoopDiscoveryScraper(
-          scholarshipsTable,
-          jobsTable,
-          jobId,
-          environment,
-          rawDataBucket
-        );
-        break;
-
-      case 'discovery_crawl':
-        scraper = new DiscoveryCrawlScraper(
+      case 'college_scholarship_search':
+        scraper = new GeneralSearchScraper(
           scholarshipsTable,
           jobsTable,
           jobId,
