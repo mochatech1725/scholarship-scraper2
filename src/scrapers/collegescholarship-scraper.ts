@@ -21,11 +21,12 @@ import {
 
 export class CollegeScholarshipScraper extends BaseScraper {
   private defaultOptions = {
-    maxResults: Math.min(MAX_SCHOLARSHIP_SEARCH_RESULTS, 20), // Further reduce to 20 for better performance
+    maxResults: Math.min(MAX_SCHOLARSHIP_SEARCH_RESULTS, 10), // Drastically reduce to 10 to ensure completion
     timeout: REQUEST_TIMEOUT_MS,
     retryAttempts: MAX_RETRY_ATTEMPTS,
-    concurrentRequests: 3, // Process 3 scholarships concurrently
-    requestDelay: 150 // Reduced delay between requests
+    concurrentRequests: 2, // Reduce concurrent requests to 2
+    requestDelay: 100, // Further reduce delay
+    skipDetailFetching: true // Skip individual detail fetching to speed up
   };
 
   private async processScholarshipBatch(scholarshipPromises: Promise<Scholarship>[], batchSize: number = 3): Promise<Scholarship[]> {
@@ -131,6 +132,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
     let errors: string[] = [];
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 5; // Stop if 5 consecutive errors
+    const startTime = Date.now();
+    const maxProcessingTime = 50 * 60 * 1000; // 50 minutes max processing time
     
     try {
       await this.updateJobStatus('running', {
@@ -154,7 +157,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
         const $ = cheerio.load(response.data);
         const scholarshipPromises: Promise<Scholarship>[] = [];
         
-        for (let i = 0; i < $('.row').length && consecutiveErrors < maxConsecutiveErrors; i++) {
+        for (let i = 0; i < $('.row').length && consecutiveErrors < maxConsecutiveErrors && (Date.now() - startTime) < maxProcessingTime; i++) {
           const elem = $('.row')[i];
           const $row = $(elem);
           
@@ -241,8 +244,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
                   jobId: '',
                 };
                 
-                // Fetch detailed information if we have a valid URL (optimized)
-                if (link && link.startsWith('http') && consecutiveErrors < maxConsecutiveErrors) {
+                // Fetch detailed information if enabled and we have a valid URL (optimized)
+                if (!this.defaultOptions.skipDetailFetching && link && link.startsWith('http') && consecutiveErrors < maxConsecutiveErrors) {
                   try {
                     const details = await this.fetchScholarshipDetails(link);
                     Object.assign(scholarship, details);
@@ -257,6 +260,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
                       // Continue without fetching details for this scholarship
                     }
                   }
+                } else if (this.defaultOptions.skipDetailFetching) {
+                  console.log(`Skipping detail fetch for ${title} (detail fetching disabled)`);
                 }
                 
                 return scholarship;
@@ -268,6 +273,9 @@ export class CollegeScholarshipScraper extends BaseScraper {
         }
         
         console.log(`Processing ${scholarshipPromises.length} scholarships in batches of ${this.defaultOptions.concurrentRequests}...`);
+        if ((Date.now() - startTime) > maxProcessingTime * 0.8) {
+          console.warn('Approaching time limit, processing remaining scholarships without detail fetching');
+        }
         const scholarships = await this.processScholarshipBatch(scholarshipPromises, this.defaultOptions.concurrentRequests);
         console.log(`Successfully processed ${scholarships.length} scholarships`);
         return scholarships.slice(0, opts.maxResults);
