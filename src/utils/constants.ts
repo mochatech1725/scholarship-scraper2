@@ -54,7 +54,7 @@ export const MAX_RETRY_ATTEMPTS = parseInt(process.env.MAX_RETRY_ATTEMPTS || '3'
 export const RETRY_DELAY_MS = parseInt(process.env.RETRY_DELAY_MS || '1000', 10);
 
 // CareerOneStop Scraper Specific
-export const CAREERONESTOP_URL = process.env.CAREERONESTOP_URL || 'https://www.careeronestop.org/financial-aid/scholarship-search/scholarship-search.aspx';
+export const CAREERONESTOP_URL = process.env.CAREERONESTOP_URL || 'https://www.careeronestop.org/Toolkit/Training/find-scholarships.aspx';
 export const CAREERONESTOP_PAGE_OFFSET = parseInt(process.env.CAREERONESTOP_PAGE_OFFSET || '0', 10);
 export const COLLEGESCHOLARSHIPS_URL = process.env.COLLEGESCHOLARSHIPS_URL || 'https://www.collegescholarships.org/scholarships/';
 export const COLLEGESCHOLARSHIPS_PAGE_OFFSET = parseInt(process.env.COLLEGESCHOLARSHIPS_PAGE_OFFSET || '0', 10);

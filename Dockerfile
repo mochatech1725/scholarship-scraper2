@@ -34,6 +34,9 @@ COPY tsconfig.json tsconfig.docker.json ./
 # Compile TypeScript using Docker-specific config
 RUN npx tsc -p tsconfig.docker.json
 
+# Copy runtime config file for scrapers
+COPY cdk/config/scraper-config.json dist/cdk/config/scraper-config.json
+
 # Remove dev dependencies and CDK files to reduce image size
 RUN npm prune --production
 RUN rm -rf src/cdk/ tsconfig.docker.json
