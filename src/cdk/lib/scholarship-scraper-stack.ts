@@ -294,7 +294,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // ECS Cluster for Batch
     this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
       vpc: this.vpc,
-      containerInsights: true,
+      containerInsightsV2: ecs.ContainerInsights.ENABLED,
     });
   }
 
