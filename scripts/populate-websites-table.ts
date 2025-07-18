@@ -17,12 +17,19 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const websitesData = [
   {
     name: 'collegescholarship',
-    url: 'https://collegescholarship.com',
-    type: 'api',
-    apiEndpoint: 'https://api.collegescholarship.com/scholarships',
-    apiKey: 'ENV_VAR_COLLEGESCHOLARSHIP_API_KEY',
+    url: 'https://www.collegescholarships.org',
+    type: 'crawl',
+    crawlUrl: 'https://www.collegescholarships.org/scholarships/',
     enabled: true,
     scraperClass: 'CollegeScholarshipScraper',
+    selectors: {
+      scholarshipLinks: ".scholarship-description h4 a",
+      title: ".scholarship-description h4 a",
+      amount: ".scholarship-summary .lead strong",
+      deadline: ".scholarship-summary p:last-child strong",
+      description: ".scholarship-description p:first-child",
+      organization: ".sponsor p"
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -51,11 +58,11 @@ const websitesData = [
     scraperClass: 'GumLoopDiscoveryScraper',
     discoveryConfig: {
       seedUrls: [
-        'https://www.harvard.edu/financial-aid/scholarships',
-        'https://www.stanford.edu/admission-aid/financial-aid/scholarships',
-        'https://www.mit.edu/admissions-aid/financial-aid/scholarships',
-        'https://www.yale.edu/admissions-aid/financial-aid/scholarships',
-        'https://www.princeton.edu/admission-aid/financial-aid/scholarships'
+        'https://college.harvard.edu/financial-aid',
+        'https://financialaid.stanford.edu',
+        'https://sfs.mit.edu',
+        'https://finaid.yale.edu',
+        'https://admission.princeton.edu/cost-aid'
       ],
       domainFilter: '.edu',
       keywordFilter: ['scholarship', 'financial aid', 'grant', 'award'],
