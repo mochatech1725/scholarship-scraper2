@@ -1,8 +1,0 @@
-[
-  {
-    "Source": "aws.events",
-    "DetailType": "Scheduled Event",
-    "Detail": "{}",
-    "EventBusName": "default"
-  }
-] 
