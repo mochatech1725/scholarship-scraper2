@@ -9,6 +9,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 import { ConfigUtils } from '../../utils/helper';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -24,6 +25,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private websitesTable: dynamodb.Table;
   private rawDataBucket: s3.Bucket;
   private batchJobRole: iam.Role;
+  private batchExecutionRole: iam.Role; // Separate execution role
   private batchServiceRole: iam.Role;
   private lambdaRole: iam.Role;
   private vpc: ec2.Vpc;
@@ -33,26 +35,27 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private jobQueue: batch.CfnJobQueue;
   private jobDefinition: batch.CfnJobDefinition;
   private jobOrchestrator: NodejsFunction;
+  private batchLogGroup: logs.LogGroup;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-
+  
     // Get environment from context (passed via -c environment=dev)
     const environment = cdk.Stack.of(this).node.tryGetContext('environment') || 'dev';
-
+  
     // Load configuration files
     const { environment: envConfig, tags: tagsConfig, iamPolicies } = ConfigUtils.loadAllConfigs(environment);
-
+  
     this.applyTags(tagsConfig, environment);
-
+  
     this.setupS3(environment);
     this.setupDynamoDB(environment, envConfig);
     this.setupIAMRoles();
     this.setupCompute(envConfig);
-    this.setupBatch(environment, envConfig);
+    this.setupCloudWatch(environment, envConfig);  // Move this BEFORE setupBatch
+    this.setupBatch(environment, envConfig);       // Now this.batchLogGroup exists
     this.setupLambda(environment);
     this.setupEventBridge();
-    this.setupCloudWatch(environment, envConfig);
     this.setupOutputs();
   }
 
@@ -91,8 +94,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
       ],
     });
   }
-
-  // Note: Config bucket removed - configurations are now managed via DynamoDB and local files
 
   private setupDynamoDB(environment: string, envConfig: any): void {
     this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
@@ -150,12 +151,19 @@ export class ScholarshipScraperStack extends cdk.Stack {
   }
 
   private setupIAMRoles(): void {
-    // Batch Job Role for ECS tasks
+    // Batch Job Role for ECS tasks (application permissions)
     this.batchJobRole = new iam.Role(this, 'BatchJobRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'Role for Batch job tasks to access AWS services',
+    });
+
+    // Batch Execution Role for ECS tasks (infrastructure permissions)
+    this.batchExecutionRole = new iam.Role(this, 'BatchExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBatchServiceRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
       ],
+      description: 'Role for Batch job execution (pulling images, logs, etc.)',
     });
 
     // Batch Service Role for Compute Environment
@@ -177,7 +185,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
   }
 
   private grantPermissions(): void {
-    // Grant DynamoDB permissions
+    // Grant DynamoDB permissions to job role
     this.scholarshipsTable.grantReadWriteData(this.batchJobRole);
     this.jobsTable.grantReadWriteData(this.batchJobRole);
     this.websitesTable.grantReadData(this.batchJobRole);
@@ -188,8 +196,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // Grant S3 permissions for raw data storage
     this.rawDataBucket.grantReadWrite(this.batchJobRole);
     this.rawDataBucket.grantReadWrite(this.lambdaRole);
-
-    // Note: Config bucket permissions removed - configurations are now managed via DynamoDB
 
     // Grant Batch permissions to Lambda role
     this.lambdaRole.addToPolicy(new iam.PolicyStatement({
@@ -202,8 +208,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
       resources: ['*']
     }));
 
-    // Grant ECR permissions to batch job role
-    this.batchJobRole.addToPolicy(new iam.PolicyStatement({
+    // Grant ECR permissions to execution role (not job role)
+    this.batchExecutionRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'ecr:GetAuthorizationToken',
@@ -214,7 +220,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
       resources: ['*']
     }));
 
-    // Grant Bedrock permissions
+    // Grant Bedrock permissions to job role
     this.batchJobRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
@@ -222,7 +228,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonBedrockFullAccess')
     );
 
-    // Grant CloudWatch Logs permissions to batch job role
+    // Grant CloudWatch Logs permissions to job role
     this.batchJobRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
@@ -239,7 +245,20 @@ export class ScholarshipScraperStack extends cdk.Stack {
     // VPC for Batch jobs
     this.vpc = new ec2.Vpc(this, 'ScraperVPC', {
       maxAzs: envConfig.maxAzs,
-      natGateways: Math.max(1, envConfig.natGateways || 1), // Ensure at least 1 NAT gateway
+      natGateways: Math.max(1, envConfig.natGateways || 1),
+      // Ensure we have both public and private subnets
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
     });
 
     // Add VPC Endpoints for ECR (Critical for private subnet ECR access)
@@ -269,24 +288,26 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.batchSecurityGroup = new ec2.SecurityGroup(this, 'BatchSecurityGroup', {
       vpc: this.vpc,
       description: 'Security group for Batch compute environment',
-      allowAllOutbound: true, // Allow all outbound traffic
+      allowAllOutbound: true,
     });
 
     // ECS Cluster for Batch
     this.cluster = new ecs.Cluster(this, 'ScraperCluster', {
       vpc: this.vpc,
-      containerInsightsV2: ecs.ContainerInsights.ENABLED,
+      containerInsights: true,
     });
   }
 
   private setupBatch(environment: string, envConfig: any): void {
+    // Use private subnets for better security
     this.computeEnvironment = new batch.CfnComputeEnvironment(this, 'ScraperComputeEnvironment', {
       type: 'MANAGED',
       computeResources: {
         type: 'FARGATE',
         maxvCpus: envConfig.batchMaxVcpus,
-        subnets: this.vpc.publicSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
-        securityGroupIds: [this.batchSecurityGroup.securityGroupId], // Use dedicated security group
+        // Use private subnets instead of public
+        subnets: this.vpc.privateSubnets.map((subnet: ec2.ISubnet) => subnet.subnetId),
+        securityGroupIds: [this.batchSecurityGroup.securityGroupId],
       },
       serviceRole: this.batchServiceRole.roleArn,
       state: 'ENABLED',
@@ -312,12 +333,12 @@ export class ScholarshipScraperStack extends cdk.Stack {
       type: 'container',
       containerProperties: {
         image: ecrImageUri,
-        jobRoleArn: this.batchJobRole.roleArn,
-        executionRoleArn: this.batchJobRole.roleArn, // Fargate jobs need both jobRoleArn and executionRoleArn
+        jobRoleArn: this.batchJobRole.roleArn, // Application permissions
+        executionRoleArn: this.batchExecutionRole.roleArn, // Infrastructure permissions
         resourceRequirements: [
           {
             type: 'VCPU',
-            value: '1',
+            value: '1.0',
           },
           {
             type: 'MEMORY',
@@ -328,6 +349,10 @@ export class ScholarshipScraperStack extends cdk.Stack {
           {
             name: 'ENVIRONMENT',
             value: environment,
+          },
+          {
+            name: 'AWS_DEFAULT_REGION',
+            value: cdk.Stack.of(this).region,
           },
           {
             name: 'S3_RAW_DATA_BUCKET',
@@ -341,11 +366,15 @@ export class ScholarshipScraperStack extends cdk.Stack {
             name: 'JOBS_TABLE',
             value: this.jobsTable.tableName,
           },
+          {
+            name: 'WEBSITES_TABLE',
+            value: this.websitesTable.tableName,
+          },
         ],
         logConfiguration: {
           logDriver: 'awslogs',
           options: {
-            'awslogs-group': `/aws/batch/job`,
+            'awslogs-group': this.batchLogGroup.logGroupName,
             'awslogs-region': cdk.Stack.of(this).region,
             'awslogs-stream-prefix': 'scholarship-scraper',
           },
@@ -355,9 +384,10 @@ export class ScholarshipScraperStack extends cdk.Stack {
         attemptDurationSeconds: 3600, // 60 minutes timeout
       },
       platformCapabilities: ['FARGATE'],
-      // Specify platform version to ensure compatibility with networking model
-      // Using 1.4.0 or later for the new networking model
     });
+
+    // Add dependency to ensure log group is created before job definition
+    this.jobDefinition.node.addDependency(this.batchLogGroup);
   }
 
   private setupLambda(environment: string): void {
@@ -389,14 +419,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private setupEventBridge(): void {
     // EventBridge Rule for scheduling
     const rule = new events.Rule(this, 'ScrapingSchedule', {
-      schedule: events.Schedule.expression('rate(1 hour)'), // This will be loaded from config
+      schedule: events.Schedule.expression('rate(1 hour)'),
       targets: [new targets.LambdaFunction(this.jobOrchestrator)],
     });
   }
 
   private setupCloudWatch(environment: string, envConfig: any): void {
-    // Note: Lambda and Batch services create their own log groups automatically
-    // This method is kept for future custom logging configuration if needed
+    // Create CloudWatch Log Group for Batch jobs
+    this.batchLogGroup = new logs.LogGroup(this, 'BatchLogGroup', {
+      logGroupName: `/aws/batch/scholarship-scraper-${environment}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
   }
 
   private setupOutputs(): void {
@@ -444,6 +478,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BatchSecurityGroupId', {
       value: this.batchSecurityGroup.securityGroupId,
       description: 'Security group ID for Batch compute environment',
+    });
+
+    new cdk.CfnOutput(this, 'BatchLogGroupName', {
+      value: this.batchLogGroup.logGroupName,
+      description: 'CloudWatch Log Group for Batch jobs',
     });
 
     // ECR Image URI output
