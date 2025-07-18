@@ -6,13 +6,11 @@ import { GumLoopDiscoveryScraper } from '../scrapers/gumloop-discovery-scraper';
 import { DiscoveryCrawlScraper } from '../scrapers/discovery-crawl-scraper';
 import { ScrapingResult } from '../utils/types';
 
-// Get environment variables
 const WEBSITE = process.env.WEBSITE;
 const JOB_ID = process.env.JOB_ID;
 const ENVIRONMENT = process.env.ENVIRONMENT;
 const SCHOLARSHIPS_TABLE = process.env.SCHOLARSHIPS_TABLE;
 const JOBS_TABLE = process.env.JOBS_TABLE;
-// S3_RAW_DATA_BUCKET is set by CDK stack as environment variable
 
 if (!WEBSITE || !JOB_ID || !ENVIRONMENT || !SCHOLARSHIPS_TABLE || !JOBS_TABLE) {
   console.error('Missing required environment variables:', {

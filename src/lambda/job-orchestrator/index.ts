@@ -6,7 +6,6 @@ import {
   ENVIRONMENT, 
   LAMBDA_TIMEOUT_MINUTES
 } from '../../utils/constants';
-import { ConfigUtils } from '../../utils/helper';
 
 const batchClient = new BatchClient({});
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));

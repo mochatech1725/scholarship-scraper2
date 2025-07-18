@@ -5,9 +5,8 @@ import {
   AWS_BEDROCK_MODEL_ID, 
   DESCRIPTION_MAX_LENGTH,
   ELIGIBILITY_MAX_LENGTH,
-  AWS_BEDROCK_VERSION
 } from '../utils/constants';
-import { TextUtils, ScholarshipUtils, ConfigUtils } from '../utils/helper';
+import { ConfigUtils } from '../utils/helper';
 import { RateLimiter } from './RateLimiter';
 
 interface GumLoopDiscoveryResult {
