@@ -10,6 +10,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 
 import { ConfigUtils } from '../../utils/helper';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -36,6 +38,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
   private jobDefinition: batch.CfnJobDefinition;
   private jobOrchestrator: NodejsFunction;
   private batchLogGroup: logs.LogGroup;
+  private mysqlInstance: rds.DatabaseInstance;
+  private mysqlSecret: secretsmanager.ISecret;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -52,6 +56,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
     this.setupDynamoDB(environment, envConfig);
     this.setupIAMRoles();
     this.setupCompute(envConfig);
+    this.setupRDS(environment, envConfig);
     this.setupCloudWatch(environment, envConfig);  // Move this BEFORE setupBatch
     this.setupBatch(environment, envConfig);       // Now this.batchLogGroup exists
     this.setupLambda(environment);
@@ -433,6 +438,30 @@ export class ScholarshipScraperStack extends cdk.Stack {
     });
   }
 
+  private setupRDS(environment: string, envConfig: any): void {
+    // Create MySQL instance
+    this.mysqlInstance = new rds.DatabaseInstance(this, 'MySQLInstance', {
+      engine: rds.DatabaseInstanceEngine.mysql({
+        version: rds.MysqlEngineVersion.VER_8_0_35,
+      }),
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      databaseName: `scholarships_${environment}`,
+      credentials: rds.Credentials.fromSecret(secretsmanager.Secret.fromSecretNameV2(this, 'MySQLSecret', `scholarships-${environment}`)),
+      backupRetention: environment === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
+      preferredBackupWindow: '03:00-04:00',
+      storageEncrypted: true,
+      deletionProtection: environment === 'prod',
+      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Store the secret reference
+    this.mysqlSecret = this.mysqlInstance.secret!;
+  }
+
   private setupOutputs(): void {
     // Outputs
     new cdk.CfnOutput(this, 'ScholarshipsTableName', {
@@ -494,6 +523,22 @@ export class ScholarshipScraperStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'EcrImageUri', {
       value: ecrImageUri,
       description: 'ECR Image URI for the scraper container',
+    });
+
+    // RDS Outputs
+    new cdk.CfnOutput(this, 'MySQLInstanceEndpoint', {
+      value: this.mysqlInstance.instanceEndpoint.hostname,
+      description: 'MySQL instance endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'MySQLInstancePort', {
+      value: this.mysqlInstance.instanceEndpoint.port.toString(),
+      description: 'MySQL instance port',
+    });
+
+    new cdk.CfnOutput(this, 'MySQLSecretName', {
+      value: this.mysqlSecret.secretName,
+      description: 'MySQL credentials secret name',
     });
   }
 }

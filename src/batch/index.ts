@@ -3,6 +3,7 @@ import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scrape
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
 import { GumLoopScraper } from '../scrapers/gumloop-scraper';
 import { ScrapingResult } from '../utils/types';
+import { testMySQLConnection } from './test-mysql-job';
 
 const WEBSITE = process.env.WEBSITE;
 const JOB_ID = process.env.JOB_ID;
@@ -86,6 +87,13 @@ async function runScraper(): Promise<void> {
           environment,
           rawDataBucket
         );
+        break;
+
+      case 'mysql_test':
+        console.log('🧪 Running MySQL connection test...');
+        await testMySQLConnection();
+        console.log('✅ MySQL test completed successfully');
+        process.exit(0);
         break;
 
       default:

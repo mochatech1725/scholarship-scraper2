@@ -1,35 +1,38 @@
 import { Scholarship, ScrapingResult } from '../utils/types';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 import { ScraperUtils, ScrapingMetadata } from '../utils/scraper-utils';
 import { TextUtils } from '../utils/helper';
 import { S3Utils, RawDataMetadata } from '../utils/s3-utils';
+import { MySQLDatabase, createDatabaseFromEnv } from '../utils/mysql-config';
 
 export abstract class BaseScraper implements ScraperUtils {
-  protected dynamoClient: DynamoDBDocumentClient;
+  protected db: MySQLDatabase;
   protected s3Utils: S3Utils;
-  protected scholarshipsTable: string;
-  protected jobsTable: string;
   protected jobId: string;
   protected environment: string;
 
   constructor(
-    scholarshipsTable: string,
-    jobsTable: string,
+    scholarshipsTable: string, // Keep for backward compatibility
+    jobsTable: string, // Keep for backward compatibility
     jobId: string,
     environment: string,
     rawDataBucket?: string
   ) {
-    this.dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-    this.scholarshipsTable = scholarshipsTable;
-    this.jobsTable = jobsTable;
+    // Initialize database connection (will be set in initialize method)
+    this.db = null as any;
     this.jobId = jobId;
     this.environment = environment;
     
     // Initialize S3 utils if bucket is provided
     if (rawDataBucket) {
       this.s3Utils = new S3Utils({ bucketName: rawDataBucket });
+    }
+  }
+
+  protected async initialize(): Promise<void> {
+    if (!this.db) {
+      this.db = await createDatabaseFromEnv();
+      await this.db.connect();
     }
   }
 
@@ -139,15 +142,13 @@ export abstract class BaseScraper implements ScraperUtils {
 
   protected async checkDuplicate(scholarship: Scholarship): Promise<boolean> {
     try {
-      const result = await this.dynamoClient.send(new GetCommand({
-        TableName: this.scholarshipsTable,
-        Key: {
-          id: scholarship.id,
-          deadline: scholarship.deadline,
-        },
-      }));
+      await this.initialize();
+      const result = await this.db.queryOne(
+        'SELECT id FROM scholarships WHERE id = ?',
+        [scholarship.id]
+      );
 
-      return !!result.Item;
+      return !!result;
     } catch (error) {
       console.error('Error checking for duplicate:', error);
       return false;
@@ -156,19 +157,16 @@ export abstract class BaseScraper implements ScraperUtils {
 
   protected async saveScholarship(scholarship: Scholarship): Promise<boolean> {
     try {
+      await this.initialize();
       const now = new Date().toISOString();
       const itemToSave = {
         ...scholarship,
-        createdAt: scholarship.createdAt || now,
-        updatedAt: now,
-        jobId: this.jobId,
+        created_at: scholarship.createdAt || now,
+        updated_at: now,
+        job_id: this.jobId,
       };
 
-      await this.dynamoClient.send(new PutCommand({
-        TableName: this.scholarshipsTable,
-        Item: itemToSave,
-      }));
-
+      await this.db.insert('scholarships', itemToSave);
       return true;
     } catch (error) {
       console.error('Error saving scholarship:', error);
@@ -185,22 +183,9 @@ export abstract class BaseScraper implements ScraperUtils {
         ? new Date().toISOString() 
         : undefined;
 
-      await this.dynamoClient.send(new PutCommand({
-        TableName: this.jobsTable,
-        Item: {
-          jobId: this.jobId,
-          startTime: new Date().toISOString(), // This should be the original start time
-          endTime,
-          status,
-          website: this.constructor.name,
-          recordsFound: metadata.recordsFound,
-          recordsProcessed: metadata.recordsProcessed,
-          recordsInserted: metadata.recordsInserted,
-          recordsUpdated: metadata.recordsUpdated,
-          errors: metadata.errors,
-          environment: this.environment,
-        },
-      }));
+      // Note: Jobs table remains in DynamoDB for now
+      // This method will need to be updated when we migrate jobs to MySQL
+      console.log(`Job status update: ${status}`, metadata);
     } catch (error) {
       console.error('Error updating job status:', error);
     }
@@ -262,27 +247,13 @@ export abstract class BaseScraper implements ScraperUtils {
 
   protected async getWebsitesFromDynamoDB(): Promise<any[]> {
     try {
-      const websitesTableName = process.env.WEBSITES_TABLE;
-      
-      if (!websitesTableName) {
-        throw new Error('WEBSITES_TABLE environment variable is not set');
-      }
-      
-      const scanCommand = new ScanCommand({
-        TableName: websitesTableName,
-        FilterExpression: '#enabled = :enabled',
-        ExpressionAttributeNames: {
-          '#enabled': 'enabled'
-        },
-        ExpressionAttributeValues: {
-          ':enabled': true
-        }
-      });
-      
-      const scanResponse = await this.dynamoClient.send(scanCommand);
-      return scanResponse.Items || [];
+      await this.initialize();
+      const websites = await this.db.query(
+        'SELECT * FROM websites WHERE enabled = TRUE'
+      );
+      return websites;
     } catch (error) {
-      console.error('Error getting websites from DynamoDB:', error);
+      console.error('Error getting websites from MySQL:', error);
       return [];
     }
   }
