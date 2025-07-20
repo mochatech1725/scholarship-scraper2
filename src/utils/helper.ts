@@ -170,6 +170,44 @@ function formatDeadline(deadline: string): string {
   return deadline;
 }
 
+function isDeadlineExpired(deadline: string): boolean {
+  if (!deadline) {
+    return false; // No deadline means not expired
+  }
+
+  const deadlineLower = deadline.toLowerCase();
+  
+  // Skip validation for rolling deadlines or no deadline specified
+  if (deadlineLower.includes('rolling') || 
+      deadlineLower.includes('no deadline') || 
+      deadlineLower.includes('ongoing') ||
+      deadlineLower.includes('continuous') ||
+      deadlineLower.includes('open')) {
+    return false;
+  }
+
+  try {
+    // Parse the deadline date
+    const deadlineDate = new Date(deadline);
+    
+    // Check if the date is valid
+    if (isNaN(deadlineDate.getTime())) {
+      console.warn(`Invalid deadline format: ${deadline}`);
+      return false; // Don't filter out invalid dates, let them pass through
+    }
+
+    // Compare with current date (end of day for deadline)
+    const now = new Date();
+    const deadlineEndOfDay = new Date(deadlineDate);
+    deadlineEndOfDay.setHours(23, 59, 59, 999); // End of the deadline day
+
+    return deadlineEndOfDay < now;
+  } catch (error) {
+    console.warn(`Error parsing deadline "${deadline}":`, error);
+    return false; // Don't filter out unparseable dates, let them pass through
+  }
+}
+
 export interface CleanTextOptions {
   quotes?: boolean;
   commas?: boolean;
@@ -625,7 +663,8 @@ export const ScholarshipUtils = {
   createScholarshipId,
   cleanAcademicLevel,
   cleanAmount,
-  formatDeadline
+  formatDeadline,
+  isDeadlineExpired
 };
 
 export const TextUtils = {

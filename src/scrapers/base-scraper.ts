@@ -99,6 +99,44 @@ export abstract class BaseScraper implements ScraperUtils {
     return createHash('md5').update(content).digest('hex');
   }
 
+  protected isDeadlineExpired(deadline: string): boolean {
+    if (!deadline) {
+      return false; // No deadline means not expired
+    }
+
+    const deadlineLower = deadline.toLowerCase();
+    
+    // Skip validation for rolling deadlines or no deadline specified
+    if (deadlineLower.includes('rolling') || 
+        deadlineLower.includes('no deadline') || 
+        deadlineLower.includes('ongoing') ||
+        deadlineLower.includes('continuous') ||
+        deadlineLower.includes('open')) {
+      return false;
+    }
+
+    try {
+      // Parse the deadline date
+      const deadlineDate = new Date(deadline);
+      
+      // Check if the date is valid
+      if (isNaN(deadlineDate.getTime())) {
+        console.warn(`Invalid deadline format: ${deadline}`);
+        return false; // Don't filter out invalid dates, let them pass through
+      }
+
+      // Compare with current date (end of day for deadline)
+      const now = new Date();
+      const deadlineEndOfDay = new Date(deadlineDate);
+      deadlineEndOfDay.setHours(23, 59, 59, 999); // End of the deadline day
+
+      return deadlineEndOfDay < now;
+    } catch (error) {
+      console.warn(`Error parsing deadline "${deadline}":`, error);
+      return false; // Don't filter out unparseable dates, let them pass through
+    }
+  }
+
   protected async checkDuplicate(scholarship: Scholarship): Promise<boolean> {
     try {
       const result = await this.dynamoClient.send(new GetCommand({
@@ -258,7 +296,22 @@ export abstract class BaseScraper implements ScraperUtils {
     let updated = 0;
     const errors: string[] = [];
 
-    for (const scholarship of scholarships) {
+    // Filter out scholarships with expired deadlines
+    const validScholarships = scholarships.filter(scholarship => {
+      if (!scholarship.deadline) {
+        return true; // Keep scholarships without deadlines (rolling, etc.)
+      }
+      
+      const isExpired = this.isDeadlineExpired(scholarship.deadline);
+      if (isExpired) {
+        console.log(`Skipping expired scholarship: ${scholarship.name} (deadline: ${scholarship.deadline})`);
+      }
+      return !isExpired;
+    });
+
+    console.log(`Filtered ${scholarships.length - validScholarships.length} expired scholarships, processing ${validScholarships.length} valid scholarships`);
+
+    for (const scholarship of validScholarships) {
       try {
         // Generate ID and add required fields
         const fullScholarship: Scholarship = {
