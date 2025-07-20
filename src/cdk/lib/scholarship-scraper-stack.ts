@@ -338,11 +338,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
         resourceRequirements: [
           {
             type: 'VCPU',
-            value: '1.0',
+            value: '2.0',
           },
           {
             type: 'MEMORY',
-            value: '2048',
+            value: '4096',
           },
         ],
         environment: [
