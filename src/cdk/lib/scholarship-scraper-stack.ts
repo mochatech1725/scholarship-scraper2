@@ -244,6 +244,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
       ],
       resources: ['*']
     }));
+
+    // Grant Secrets Manager permissions to job role
+    this.batchJobRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:DescribeSecret'
+      ],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:scholarships-*`
+      ]
+    }));
   }
 
   private setupCompute(envConfig: any): void {
@@ -375,6 +387,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
             name: 'WEBSITES_TABLE',
             value: this.websitesTable.tableName,
           },
+
         ],
         logConfiguration: {
           logDriver: 'awslogs',
@@ -384,6 +397,10 @@ export class ScholarshipScraperStack extends cdk.Stack {
             'awslogs-stream-prefix': 'scholarship-scraper',
           },
         },
+      },
+      parameters: {
+        WEBSITE: '',
+        JOB_ID: '',
       },
       timeout: {
         attemptDurationSeconds: 3600, // 60 minutes timeout

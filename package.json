@@ -52,7 +52,10 @@
     "test:mysql:prod": "ENVIRONMENT=prod ts-node scripts/test-mysql-connection.ts",
     "test:mysql:batch:dev": "ts-node scripts/test-mysql-batch.ts",
     "test:mysql:batch:staging": "ENVIRONMENT=staging ts-node scripts/test-mysql-batch.ts",
-    "test:mysql:batch:prod": "ENVIRONMENT=prod ts-node scripts/test-mysql-batch.ts"
+    "test:mysql:batch:prod": "ENVIRONMENT=prod ts-node scripts/test-mysql-batch.ts",
+    "migrate:mysql:batch:dev": "ts-node scripts/submit-migration-job.ts",
+    "migrate:mysql:batch:staging": "ENVIRONMENT=staging ts-node scripts/submit-migration-job.ts",
+    "migrate:mysql:batch:prod": "ENVIRONMENT=prod ts-node scripts/submit-migration-job.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",
@@ -69,11 +72,12 @@
     "@aws-cdk/aws-lambda-nodejs": "^1.203.0",
     "@aws-sdk/client-batch": "^3.0.0",
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.849.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-eventbridge": "^3.0.0",
     "@aws-sdk/client-lambda": "^3.0.0",
-    "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
     "axios": "^1.0.0",
