@@ -19,6 +19,34 @@ export interface SecretConfig {
   ssl?: boolean;
 }
 
+// Field mapping from camelCase to snake_case for scholarships table
+const SCHOLARSHIP_FIELD_MAPPING: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  deadline: 'deadline',
+  url: 'url',
+  description: 'description',
+  eligibility: 'eligibility',
+  organization: 'organization',
+  academicLevel: 'academic_level',
+  geographicRestrictions: 'geographic_restrictions',
+  targetType: 'target_type',
+  ethnicity: 'ethnicity',
+  gender: 'gender',
+  minAward: 'min_award',
+  maxAward: 'max_award',
+  renewable: 'renewable',
+  country: 'country',
+  applyUrl: 'apply_url',
+  isActive: 'is_active',
+  essayRequired: 'essay_required',
+  recommendationsRequired: 'recommendations_required',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  source: 'source',
+  jobId: 'job_id'
+};
+
 export class MySQLDatabase {
   private config: MySQLConfig;
   private pool: mysql.Pool;
@@ -78,8 +106,22 @@ export class MySQLDatabase {
   }
 
   async insert(table: string, data: Record<string, any>): Promise<number> {
-    const columns = Object.keys(data);
-    const values = Object.values(data);
+    // Map field names for scholarships table
+    const mappedData: Record<string, any> = {};
+    
+    if (table === 'scholarships') {
+      // Use field mapping for scholarships table
+      Object.entries(data).forEach(([key, value]) => {
+        const mappedKey = SCHOLARSHIP_FIELD_MAPPING[key] || key;
+        mappedData[mappedKey] = value;
+      });
+    } else {
+      // For other tables, use original field names
+      Object.assign(mappedData, data);
+    }
+    
+    const columns = Object.keys(mappedData);
+    const values = Object.values(mappedData);
     const placeholders = columns.map(() => '?').join(', ');
     
     const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
@@ -89,11 +131,30 @@ export class MySQLDatabase {
   }
 
   async update(table: string, data: Record<string, any>, where: Record<string, any>): Promise<number> {
-    const setColumns = Object.keys(data).map(col => `${col} = ?`).join(', ');
-    const whereColumns = Object.keys(where).map(col => `${col} = ?`).join(' AND ');
+    // Map field names for scholarships table
+    let mappedData = data;
+    let mappedWhere = where;
+    
+    if (table === 'scholarships') {
+      // Use field mapping for scholarships table
+      mappedData = {};
+      Object.entries(data).forEach(([key, value]) => {
+        const mappedKey = SCHOLARSHIP_FIELD_MAPPING[key] || key;
+        mappedData[mappedKey] = value;
+      });
+      
+      mappedWhere = {};
+      Object.entries(where).forEach(([key, value]) => {
+        const mappedKey = SCHOLARSHIP_FIELD_MAPPING[key] || key;
+        mappedWhere[mappedKey] = value;
+      });
+    }
+    
+    const setColumns = Object.keys(mappedData).map(col => `${col} = ?`).join(', ');
+    const whereColumns = Object.keys(mappedWhere).map(col => `${col} = ?`).join(' AND ');
     
     const sql = `UPDATE ${table} SET ${setColumns} WHERE ${whereColumns}`;
-    const values = [...Object.values(data), ...Object.values(where)];
+    const values = [...Object.values(mappedData), ...Object.values(mappedWhere)];
     
     const result = await this.pool.execute(sql, values);
     return (result[0] as any).affectedRows;
