@@ -18,6 +18,7 @@ CREATE TABLE scholarships (
   description TEXT,
   eligibility TEXT,
   organization VARCHAR(255),
+  org_website TEXT,
   academic_level VARCHAR(100),
   geographic_restrictions TEXT,
   target_type ENUM('need', 'merit', 'both') DEFAULT 'both',
@@ -42,6 +43,7 @@ CREATE TABLE scholarships (
   -- Indexes for common queries
   INDEX idx_deadline (deadline),
   INDEX idx_organization (organization),
+  INDEX idx_org_website (org_website(255)),
   INDEX idx_academic_level (academic_level),
   INDEX idx_target_type (target_type),
   INDEX idx_ethnicity (ethnicity),
@@ -58,7 +60,7 @@ CREATE TABLE scholarships (
   INDEX idx_organization_deadline (organization, deadline),
   
   -- Full-text search index
-  FULLTEXT idx_search (name, description, eligibility, organization)
+  FULLTEXT idx_search (name, description, eligibility, organization, org_website)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create websites table
@@ -139,4 +141,36 @@ SHOW INDEX FROM websites;
 SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 -- Show sample data
-SELECT * FROM websites WHERE enabled = TRUE; 
+SELECT * FROM websites WHERE enabled = TRUE;
+
+-- Create applications table (if it doesn't exist)
+CREATE TABLE IF NOT EXISTS applications (
+  id VARCHAR(255) NOT NULL,
+  user_id VARCHAR(255) NOT NULL,
+  scholarship_id VARCHAR(255) NOT NULL,
+  organization VARCHAR(255),
+  org_website TEXT,
+  status ENUM('draft', 'submitted', 'approved', 'rejected', 'withdrawn') DEFAULT 'draft',
+  submitted_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  -- Primary key
+  PRIMARY KEY (id),
+  
+  -- Foreign keys
+  INDEX idx_user_id (user_id),
+  INDEX idx_scholarship_id (scholarship_id),
+  INDEX idx_organization (organization),
+  INDEX idx_status (status),
+  INDEX idx_submitted_at (submitted_at),
+  INDEX idx_created_at (created_at),
+  
+  -- Composite indexes for common query patterns
+  INDEX idx_user_status (user_id, status),
+  INDEX idx_scholarship_status (scholarship_id, status),
+  INDEX idx_organization_status (organization, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Show applications table structure
+DESCRIBE applications; 
