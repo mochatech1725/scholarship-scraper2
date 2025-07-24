@@ -21,7 +21,7 @@ export interface SecretConfig {
 
 // Field mapping from camelCase to snake_case for scholarships table
 const SCHOLARSHIP_FIELD_MAPPING: Record<string, string> = {
-  id: 'id',
+  scholarshipId: 'scholarship_id', // Auto-generated primary key
   name: 'name',
   deadline: 'deadline',
   url: 'url',
@@ -43,8 +43,7 @@ const SCHOLARSHIP_FIELD_MAPPING: Record<string, string> = {
   recommendationsRequired: 'recommendations_required',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  source: 'source',
-  jobId: 'job_id'
+  source: 'source'
 };
 
 export class MySQLDatabase {

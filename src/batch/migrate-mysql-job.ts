@@ -40,7 +40,6 @@ interface Scholarship {
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
   source: string; // website name
-  jobId: string; // batch job that created this record
 }
 
 interface Website {
@@ -81,7 +80,7 @@ async function createTables(connection: mysql.Connection): Promise<void> {
   // Create scholarships table
   const scholarshipsTableSQL = `
     CREATE TABLE IF NOT EXISTS scholarships (
-      id VARCHAR(255) PRIMARY KEY,
+      scholarship_id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(500) NOT NULL,
       deadline DATE,
       url VARCHAR(1000),
@@ -102,7 +101,6 @@ async function createTables(connection: mysql.Connection): Promise<void> {
       essay_required BOOLEAN DEFAULT FALSE,
       recommendations_required BOOLEAN DEFAULT FALSE,
       source VARCHAR(255),
-      job_id VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_deadline (deadline),
@@ -183,13 +181,13 @@ async function migrateScholarships(connection: mysql.Connection): Promise<void> 
         // Insert into MySQL
         const insertSQL = `
           INSERT INTO scholarships (
-            id, name, deadline, url, description, eligibility, organization, 
+            name, deadline, url, description, eligibility, organization, 
             academic_level, geographic_restrictions, target_type, ethnicity, 
             gender, min_award, max_award, renewable, country, apply_url, 
             is_active, essay_required, recommendations_required, source, 
-            job_id, created_at, updated_at
+            created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
             name = VALUES(name),
             deadline = VALUES(deadline),
@@ -211,12 +209,10 @@ async function migrateScholarships(connection: mysql.Connection): Promise<void> 
             essay_required = VALUES(essay_required),
             recommendations_required = VALUES(recommendations_required),
             source = VALUES(source),
-            job_id = VALUES(job_id),
             updated_at = CURRENT_TIMESTAMP
         `;
 
         await connection.execute(insertSQL, [
-          item.id,
           item.name || item.title || '', // Handle both name and title fields
           item.deadline,
           item.url || '',
@@ -237,7 +233,6 @@ async function migrateScholarships(connection: mysql.Connection): Promise<void> 
           item.essayRequired || false,
           item.recommendationsRequired || false,
           item.source || '',
-          item.jobId || '',
           item.createdAt,
           item.updatedAt
         ]);
@@ -349,7 +344,7 @@ async function showTableStats(connection: mysql.Connection): Promise<void> {
 
     // Show recent scholarships
     const [recentScholarships] = await connection.execute(`
-      SELECT name, deadline, source, organization 
+      SELECT scholarship_id, name, deadline, source, organization 
       FROM scholarships 
       ORDER BY created_at DESC 
       LIMIT 5
@@ -357,7 +352,7 @@ async function showTableStats(connection: mysql.Connection): Promise<void> {
     
     console.log('\n📋 Recent Scholarships:');
     (recentScholarships as any[]).forEach(scholarship => {
-      console.log(`  - ${scholarship.name} (${scholarship.organization || scholarship.source}) - Deadline: ${scholarship.deadline}`);
+      console.log(`  - [ID: ${scholarship.scholarship_id}] ${scholarship.name} (${scholarship.organization || scholarship.source}) - Deadline: ${scholarship.deadline}`);
     });
 
   } catch (error) {

@@ -3,17 +3,12 @@ import { CollegeScholarshipScraper } from '../scrapers/collegescholarship-scrape
 import { GeneralSearchScraper } from '../scrapers/general-search-scraper';
 import { GumLoopScraper } from '../scrapers/gumloop-scraper';
 import { ScrapingResult } from '../utils/types';
-import { testMySQLConnection } from './test-mysql-job';
-import { migrateToMySQL } from './migrate-mysql-job';
 
 const WEBSITE = process.env.WEBSITE;
 const JOB_ID = process.env.JOB_ID;
 const ENVIRONMENT = process.env.ENVIRONMENT;
 const SCHOLARSHIPS_TABLE = process.env.SCHOLARSHIPS_TABLE;
 const JOBS_TABLE = process.env.JOBS_TABLE;
-
-// Check if this is a migration job (which doesn't need WEBSITE and JOB_ID)
-const isMigrationJob = WEBSITE === 'mysql_migrate';
 
 if (!ENVIRONMENT || !SCHOLARSHIPS_TABLE || !JOBS_TABLE) {
   console.error('Missing required environment variables:', {
@@ -26,8 +21,7 @@ if (!ENVIRONMENT || !SCHOLARSHIPS_TABLE || !JOBS_TABLE) {
   process.exit(1);
 }
 
-// For non-migration jobs, WEBSITE and JOB_ID are required
-if (!isMigrationJob && (!WEBSITE || !JOB_ID)) {
+if (!WEBSITE || !JOB_ID) {
   console.error('Missing required environment variables for scraper job:', {
     WEBSITE,
     JOB_ID,
@@ -100,20 +94,6 @@ async function runScraper(): Promise<void> {
           environment,
           rawDataBucket
         );
-        break;
-
-      case 'mysql_test':
-        console.log('🧪 Running MySQL connection test...');
-        await testMySQLConnection();
-        console.log('✅ MySQL test completed successfully');
-        process.exit(0);
-        break;
-
-      case 'mysql_migrate':
-        console.log('🚀 Running MySQL migration...');
-        await migrateToMySQL();
-        console.log('✅ MySQL migration completed successfully');
-        process.exit(0);
         break;
 
       default:
