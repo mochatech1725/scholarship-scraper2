@@ -1,0 +1,4 @@
+[submodule "src/shared-types"]
+	path = src/shared-types
+	url = https://github.com/mochatech1725/scholarship-types
+	branch = main
