@@ -22,9 +22,7 @@ export interface ScholarshipScraperStackProps extends cdk.StackProps {
 }
 
 export class ScholarshipScraperStack extends cdk.Stack {
-  private scholarshipsTable: dynamodb.Table;
   private jobsTable: dynamodb.Table;
-  private websitesTable: dynamodb.Table;
   private rawDataBucket: s3.Bucket;
   private batchJobRole: iam.Role;
   private batchExecutionRole: iam.Role; // Separate execution role
@@ -101,14 +99,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
   }
 
   private setupDynamoDB(environment: string, envConfig: any): void {
-    this.scholarshipsTable = new dynamodb.Table(this, 'ScholarshipsTable', {
-      tableName: `scholarships-${environment}`,
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
-      billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
     // Jobs Table
     this.jobsTable = new dynamodb.Table(this, 'ScrapingJobsTable', {
       tableName: `scholarship-jobs-${environment}`,
@@ -116,42 +106,6 @@ export class ScholarshipScraperStack extends cdk.Stack {
       sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
       billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Websites Configuration Table
-    this.websitesTable = new dynamodb.Table(this, 'WebsitesTable', {
-      tableName: `scholarship-websites-${environment}`,
-      partitionKey: { name: 'name', type: dynamodb.AttributeType.STRING },
-      billingMode: envConfig.dynamoBillingMode === 'PROVISIONED' ? dynamodb.BillingMode.PROVISIONED : dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: environment === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    this.setupScholarshipTableIndexes();
-  }
-
-  private setupScholarshipTableIndexes(): void {
-    this.scholarshipsTable.addGlobalSecondaryIndex({
-      indexName: 'DeadlineIndex',
-      partitionKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'targetType', type: dynamodb.AttributeType.STRING },
-    });
-
-    this.scholarshipsTable.addGlobalSecondaryIndex({
-      indexName: 'TargetTypeIndex',
-      partitionKey: { name: 'targetType', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
-    });
-
-    this.scholarshipsTable.addGlobalSecondaryIndex({
-      indexName: 'EthnicityIndex',
-      partitionKey: { name: 'ethnicity', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
-    });
-
-    this.scholarshipsTable.addGlobalSecondaryIndex({
-      indexName: 'GenderIndex',
-      partitionKey: { name: 'gender', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'deadline', type: dynamodb.AttributeType.STRING },
     });
   }
 
@@ -183,6 +137,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
     });
 
@@ -191,12 +146,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
   private grantPermissions(): void {
     // Grant DynamoDB permissions to job role
-    this.scholarshipsTable.grantReadWriteData(this.batchJobRole);
     this.jobsTable.grantReadWriteData(this.batchJobRole);
-    this.websitesTable.grantReadData(this.batchJobRole);
-    this.scholarshipsTable.grantReadWriteData(this.lambdaRole);
     this.jobsTable.grantReadWriteData(this.lambdaRole);
-    this.websitesTable.grantReadData(this.lambdaRole);
 
     // Grant S3 permissions for raw data storage
     this.rawDataBucket.grantReadWrite(this.batchJobRole);
@@ -256,6 +207,18 @@ export class ScholarshipScraperStack extends cdk.Stack {
         `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:scholarships-*`
       ]
     }));
+
+    // Grant Secrets Manager permissions to Lambda role
+    this.lambdaRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:DescribeSecret'
+      ],
+      resources: [
+        `arn:aws:secretsmanager:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:secret:scholarships-*`
+      ]
+    }));
   }
 
   private setupCompute(envConfig: any): void {
@@ -301,10 +264,27 @@ export class ScholarshipScraperStack extends cdk.Stack {
       service: ec2.InterfaceVpcEndpointAwsService.ECS,
     });
 
-    // Create a dedicated security group for Batch
+    // Secrets Manager endpoint (for Lambda to access secrets)
+    this.vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      privateDnsEnabled: false, // Disable private DNS to avoid conflicts
+    });
+
+    // DynamoDB endpoint (for Lambda to access DynamoDB)
+    this.vpc.addGatewayEndpoint('DynamoDBEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+    });
+
+    // Batch endpoint (for Lambda to submit batch jobs)
+    this.vpc.addInterfaceEndpoint('BatchEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.BATCH,
+      privateDnsEnabled: false, // Disable private DNS to avoid conflicts
+    });
+
+    // Create a dedicated security group for Batch and Lambda
     this.batchSecurityGroup = new ec2.SecurityGroup(this, 'BatchSecurityGroup', {
       vpc: this.vpc,
-      description: 'Security group for Batch compute environment',
+      description: 'Security group for Batch compute environment and Lambda',
       allowAllOutbound: true,
     });
 
@@ -376,16 +356,8 @@ export class ScholarshipScraperStack extends cdk.Stack {
             value: this.rawDataBucket.bucketName,
           },
           {
-            name: 'SCHOLARSHIPS_TABLE',
-            value: this.scholarshipsTable.tableName,
-          },
-          {
             name: 'JOBS_TABLE',
             value: this.jobsTable.tableName,
-          },
-          {
-            name: 'WEBSITES_TABLE',
-            value: this.websitesTable.tableName,
           },
 
         ],
@@ -420,9 +392,7 @@ export class ScholarshipScraperStack extends cdk.Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
       environment: {
-        SCHOLARSHIPS_TABLE: this.scholarshipsTable.tableName,
         JOBS_TABLE: this.jobsTable.tableName,
-        WEBSITES_TABLE: this.websitesTable.tableName,
         ENVIRONMENT: environment,
         JOB_QUEUE_ARN: this.jobQueue.ref,
         JOB_DEFINITION_ARN: this.jobDefinition.ref,
@@ -435,6 +405,11 @@ export class ScholarshipScraperStack extends cdk.Stack {
         target: 'es2022',
       },
       role: this.lambdaRole,
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [this.batchSecurityGroup],
     });
   }
 
@@ -477,23 +452,21 @@ export class ScholarshipScraperStack extends cdk.Stack {
 
     // Store the secret reference
     this.mysqlSecret = this.mysqlInstance.secret!;
+
+    // Allow Lambda to connect to RDS
+    this.mysqlInstance.connections.allowFrom(
+      this.batchSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow Lambda to connect to MySQL'
+    );
   }
 
   private setupOutputs(): void {
     // Outputs
-    new cdk.CfnOutput(this, 'ScholarshipsTableName', {
-      value: this.scholarshipsTable.tableName,
-      description: 'DynamoDB table for scholarships',
-    });
 
     new cdk.CfnOutput(this, 'JobsTableName', {
       value: this.jobsTable.tableName,
       description: 'DynamoDB table for scraping jobs',
-    });
-
-    new cdk.CfnOutput(this, 'WebsitesTableName', {
-      value: this.websitesTable.tableName,
-      description: 'DynamoDB table for website configurations',
     });
 
     new cdk.CfnOutput(this, 'RawDataBucketName', {

@@ -1,4 +1,4 @@
-import { Scholarship, ScrapingResult } from '../utils/types';
+import { ScrapingResult } from '../utils/types';
 import { createHash } from 'crypto';
 import { ScraperUtils, ScrapingMetadata } from '../utils/scraper-utils';
 import { TextUtils } from '../utils/helper';
@@ -96,7 +96,7 @@ export abstract class BaseScraper implements ScraperUtils {
     }
   }
 
-  protected generateScholarshipId(scholarship: Partial<Scholarship>): string {
+  protected generateScholarshipId(scholarship: any): string {
     // Create a unique ID based on name, organization, and deadline
     const content = `${scholarship.name}-${scholarship.organization}-${scholarship.deadline}`;
     return createHash('md5').update(content).digest('hex');
@@ -140,12 +140,12 @@ export abstract class BaseScraper implements ScraperUtils {
     }
   }
 
-  protected async checkDuplicate(scholarship: Scholarship): Promise<boolean> {
+  protected async checkDuplicate(scholarship: any): Promise<boolean> {
     try {
       await this.initialize();
       const result = await this.db.queryOne(
-        'SELECT id FROM scholarships WHERE id = ?',
-        [scholarship.id]
+        'SELECT scholarship_id FROM scholarships WHERE scholarship_id = ?',
+        [scholarship.scholarship_id]
       );
 
       return !!result;
@@ -155,15 +155,14 @@ export abstract class BaseScraper implements ScraperUtils {
     }
   }
 
-  protected async saveScholarship(scholarship: Scholarship): Promise<boolean> {
+  protected async saveScholarship(scholarship: any): Promise<boolean> {
     try {
       await this.initialize();
       const now = new Date().toISOString();
       const itemToSave = {
         ...scholarship,
-        created_at: scholarship.createdAt || now,
-        updated_at: now,
-        job_id: this.jobId,
+        created_at: scholarship.created_at || now,
+        updated_at: now
       };
 
       await this.db.insert('scholarships', itemToSave);
@@ -258,7 +257,7 @@ export abstract class BaseScraper implements ScraperUtils {
     }
   }
 
-  protected async processScholarships(scholarships: Partial<Scholarship>[]): Promise<{
+  protected async processScholarships(scholarships: any[]): Promise<{
     inserted: number;
     updated: number;
     errors: string[];
@@ -285,7 +284,7 @@ export abstract class BaseScraper implements ScraperUtils {
     for (const scholarship of validScholarships) {
       try {
         // Generate ID and add required fields
-        const fullScholarship: Scholarship = {
+        const fullScholarship: any = {
           id: this.generateScholarshipId(scholarship),
           name: scholarship.name || '',
           deadline: scholarship.deadline || '',

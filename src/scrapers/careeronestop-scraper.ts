@@ -53,15 +53,15 @@ export class CareerOneStopScraper extends BaseScraper {
             details.organization = value;
             break;
           case 'level of study':
-            details.academicLevel = ScholarshipUtils.cleanAcademicLevel(value) || undefined;
+            details.academic_level = ScholarshipUtils.cleanAcademicLevel(value) || undefined;
             break;
           case 'qualifications':
             details.eligibility = value;
             break;
           case 'funds':
             const amount = ScholarshipUtils.cleanAmount(value);
-            details.minAward = parseFloat(amount) || 0;
-            details.maxAward = parseFloat(amount) || 0;
+            details.min_award = parseFloat(amount) || 0;
+            details.max_award = parseFloat(amount) || 0;
             break;
           case 'duration':
             const durationLower = value.toLowerCase();
@@ -75,7 +75,7 @@ export class CareerOneStopScraper extends BaseScraper {
           case 'state':
           case 'region':
           case 'area':
-            details.geographicRestrictions = value;
+            details.geographic_restrictions = value;
             break;
         }
       });
@@ -86,7 +86,7 @@ export class CareerOneStopScraper extends BaseScraper {
         const applyText = toApplyRow.find('td').last().text().trim();
         const urlMatch = applyText.match(/(https?:\/\/[^\s]+)/);
         if (urlMatch) {
-          details.applyUrl = urlMatch[1];
+          details.apply_url = urlMatch[1];
         }
       }
       const moreInfoRow = $('#scholarshipDetailContent table tr').filter((i, elem) => {
@@ -94,8 +94,8 @@ export class CareerOneStopScraper extends BaseScraper {
       });
       if (moreInfoRow.length > 0) {
         const moreInfoLink = moreInfoRow.find('td').last().find('a').attr('href');
-        if (moreInfoLink && !details.applyUrl) {
-          details.applyUrl = moreInfoLink;
+        if (moreInfoLink && !details.apply_url) {
+          details.apply_url = moreInfoLink;
         }
       }
       return details;
@@ -183,30 +183,25 @@ export class CareerOneStopScraper extends BaseScraper {
           const gender = ScholarshipUtils.extractGender(`${title} ${description} ${purposes}`);
           const scholarshipPromise = (async () => {
             const scholarship: Scholarship = {
-              id: ScholarshipUtils.createScholarshipId(),
-              name: cleanName,
+              title: cleanName,
               deadline: cleanDeadline,
               url: fullUrl,
               description: TextUtils.truncateText(TextUtils.removeRedundantPhrases(cleanDescription), DESCRIPTION_MAX_LENGTH),
               eligibility: TextUtils.truncateText(TextUtils.removeRedundantPhrases(''), ELIGIBILITY_MAX_LENGTH),
               source: 'CareerOneStop',
               organization: cleanOrganization,
-              academicLevel: cleanedAcademicLevel,
-              geographicRestrictions: '', // CareerOneStop doesn't provide in main listing
-              targetType: (TextUtils.ensureNonEmptyString(targetType, 'both') as 'need' | 'merit' | 'both'),
+              academic_level: cleanedAcademicLevel,
+              geographic_restrictions: '', // CareerOneStop doesn't provide in main listing
+              target_type: (TextUtils.ensureNonEmptyString(targetType, 'both') as 'need' | 'merit' | 'both'),
               ethnicity: TextUtils.ensureNonEmptyString(ethnicity, 'unspecified'),
               gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
-              minAward: parseFloat(minAward.toString()) || 0,
-              maxAward: parseFloat(maxAward.toString()) || 0,
+              min_award: parseFloat(minAward.toString()) || 0,
+              max_award: parseFloat(maxAward.toString()) || 0,
               renewable: false,
               country: 'United States',
-              applyUrl: '',
-              isActive: true,
-              essayRequired: false,
-              recommendationsRequired: false,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              jobId: this.jobId,
+              apply_url: '',
+              essay_required: false,
+              recommendation_required: false
             };
 
             // Fetch additional details if URL is available
@@ -216,8 +211,8 @@ export class CareerOneStopScraper extends BaseScraper {
                 if (details.organization) {
                   scholarship.organization = details.organization;
                 }
-                if (details.academicLevel) {
-                  scholarship.academicLevel = details.academicLevel;
+                if (details.academic_level) {
+                  scholarship.academic_level = details.academic_level;
                 }
                 if (details.eligibility) {
                   scholarship.eligibility = TextUtils.truncateText(
@@ -225,11 +220,11 @@ export class CareerOneStopScraper extends BaseScraper {
                     ELIGIBILITY_MAX_LENGTH
                   );
                 }
-                if (details.minAward && details.minAward > 0) {
-                  scholarship.minAward = details.minAward;
+                if (details.min_award && details.min_award > 0) {
+                  scholarship.min_award = details.min_award;
                 }
-                if (details.maxAward && details.maxAward > 0) {
-                  scholarship.maxAward = details.maxAward;
+                if (details.max_award && details.max_award > 0) {
+                  scholarship.max_award = details.max_award;
                 }
                 if (details.renewable !== undefined) {
                   scholarship.renewable = details.renewable;
@@ -237,11 +232,11 @@ export class CareerOneStopScraper extends BaseScraper {
                 if (details.deadline) {
                   scholarship.deadline = details.deadline;
                 }
-                if (details.geographicRestrictions) {
-                  scholarship.geographicRestrictions = details.geographicRestrictions;
+                if (details.geographic_restrictions) {
+                  scholarship.geographic_restrictions = details.geographic_restrictions;
                 }
-                if (details.applyUrl) {
-                  scholarship.applyUrl = details.applyUrl;
+                if (details.apply_url) {
+                  scholarship.apply_url = details.apply_url;
                 }
               } catch (detailError) {
                 console.warn(`Failed to fetch details for ${fullUrl}:`, detailError);
@@ -259,7 +254,6 @@ export class CareerOneStopScraper extends BaseScraper {
       errors.push(error instanceof Error ? error.message : 'Unknown error during scraping');
     }
 
-    // Process and store scholarships
     const processResult = await this.processScholarships(scholarships);
     
     const result: ScrapingResult = {

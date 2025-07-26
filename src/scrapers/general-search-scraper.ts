@@ -1,7 +1,7 @@
 import { BaseScraper } from './base-scraper';
-import { ScrapingResult, Scholarship } from '../utils/types';
+import { ScrapingResult } from '../utils/types';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import puppeteer from 'puppeteer';
+import { Scholarship } from '../shared-types/scholarship.types';
 import { 
   AWS_BEDROCK_MODEL_ID,
   MAX_SCHOLARSHIP_SEARCH_RESULTS,
@@ -105,7 +105,7 @@ export class GeneralSearchScraper extends BaseScraper {
     console.log(`Bedrock will search for ${searchFocuses.length} different focuses, max ${maxScholarshipsPerFocus} scholarships per focus`);
     
     // Add overall timeout to prevent hanging
-    const overallTimeout = new Promise<Partial<Scholarship>[]>((_, reject) => {
+    const overallTimeout = new Promise<any[]>((_, reject) => { // Changed to any[]
       setTimeout(() => reject(new Error('Bedrock function overall timeout')), 300000); // 5 minutes
     });
     
@@ -147,7 +147,7 @@ export class GeneralSearchScraper extends BaseScraper {
     return finalScholarships;
   }
 
-  private async getScholarshipsForFocus(searchFocus: string, maxResults: number): Promise<Partial<Scholarship>[]> {
+  private async getScholarshipsForFocus(searchFocus: string, maxResults: number): Promise<any[]> { // Changed to any[]
     // Wait for rate limiter before making API call
     await this.rateLimiter.waitForNextCall();
     
@@ -191,22 +191,22 @@ export class GeneralSearchScraper extends BaseScraper {
       if (Array.isArray(scholarshipsData)) {
         return scholarshipsData.map((scholarship: any) => {
           // Clean all text fields before creating scholarship object
-          const cleanTitle = TextUtils.cleanText(String(scholarship.title || scholarship.name || scholarship.scholarshipName || 'Scholarship'), { quotes: true });
-          const cleanDeadline = TextUtils.cleanText(String(scholarship.deadline || scholarship.applicationDeadline || 'Various deadlines'), { quotes: true });
+          const cleanTitle = TextUtils.cleanText(String(scholarship.title || scholarship.name || scholarship.scholarship_name || 'Scholarship'), { quotes: true });
+          const cleanDeadline = TextUtils.cleanText(String(scholarship.deadline || scholarship.application_deadline || 'Various deadlines'), { quotes: true });
           const rawDescription = TextUtils.cleanText(String(scholarship.description || scholarship.purpose || 'No description available'), { quotes: true });
           const cleanDescription = TextUtils.truncateText(TextUtils.removeRedundantPhrases(rawDescription), DESCRIPTION_MAX_LENGTH);
           const cleanOrganization = TextUtils.cleanText(String(scholarship.organization || scholarship.sponsor || scholarship.institution || ''), { quotes: true });
-          const cleanGeographicRestrictions = TextUtils.cleanText(String(scholarship.geographicRestrictions || scholarship.location || scholarship.region || ''), { quotes: true });
-          const cleanMinAward = ScholarshipUtils.cleanAmount(String(scholarship.minAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
-          const cleanMaxAward = ScholarshipUtils.cleanAmount(String(scholarship.maxAmount || scholarship.amount || scholarship.awardAmount || 'Amount varies'));
+          const cleanGeographicRestrictions = TextUtils.cleanText(String(scholarship.geographic_restrictions || scholarship.location || scholarship.region || ''), { quotes: true });
+          const cleanMinAward = ScholarshipUtils.cleanAmount(String(scholarship.min_amount || scholarship.amount || scholarship.award_amount || 'Amount varies'));
+          const cleanMaxAward = ScholarshipUtils.cleanAmount(String(scholarship.max_amount || scholarship.amount || scholarship.award_amount || 'Amount varies'));
           const cleanRenewable = TextUtils.cleanText(String(scholarship.renewable || ''), { quotes: true });
           const cleanCountry = TextUtils.cleanText(String(scholarship.country || scholarship.nationality || ''), { quotes: true });
-          const cleanApplyUrl = TextUtils.cleanText(String(scholarship.applyUrl || scholarship.applicationUrl || scholarship.url || ''), { quotes: true });
+          const cleanApplyUrl = TextUtils.cleanText(String(scholarship.apply_url || scholarship.application_url || scholarship.url || ''), { quotes: true });
           
           const rawEligibility = String(scholarship.eligibility || scholarship.requirements || scholarship.qualifications || 'Eligibility requirements vary');
           const cleanEligibility = TextUtils.truncateText(TextUtils.removeRedundantPhrases(TextUtils.cleanText(rawEligibility, { quotes: true })), ELIGIBILITY_MAX_LENGTH);
           
-          const allText = `${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility} ${scholarship.academicLevel || ''} ${scholarship.levelOfStudy || ''} ${scholarship.educationLevel || ''}`;
+          const allText = `${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility} ${scholarship.academic_level || ''} ${scholarship.level_of_study || ''} ${scholarship.education_level || ''}`;
           const extractedAcademicLevel = ScholarshipUtils.extractAcademicLevel(allText);
           const cleanedAcademicLevel = ScholarshipUtils.cleanAcademicLevel(extractedAcademicLevel);
           
@@ -219,32 +219,32 @@ export class GeneralSearchScraper extends BaseScraper {
           const ethnicity = ScholarshipUtils.extractEthnicity(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
           const gender = ScholarshipUtils.extractGender(`${scholarship.title || ''} ${scholarship.description || ''} ${rawEligibility}`);
           
-          return {
-            id: ScholarshipUtils.createScholarshipId(),
+          const scholarshipObj: any = {
+            scholarship_id: ScholarshipUtils.createScholarshipId(),
             name: cleanTitle,
             deadline: cleanDeadline,
-            url: scholarship.url || scholarship.website || scholarship.applicationUrl || '',
+            url: scholarship.url || scholarship.website || scholarship.application_url || '',
             description: cleanDescription,
             eligibility: combinedEligibility,
             source: 'Bedrock AI',
             organization: cleanOrganization,
-            academicLevel: cleanedAcademicLevel,
-            geographicRestrictions: cleanGeographicRestrictions,
-            targetType: (targetType as 'need' | 'merit' | 'both'),
+            academic_level: cleanedAcademicLevel,
+            geographic_restrictions: cleanGeographicRestrictions,
+            target_type: (targetType as 'need' | 'merit' | 'both'),
             ethnicity: TextUtils.ensureNonEmptyString(ethnicity, 'unspecified'),
             gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
-            minAward: parseFloat(cleanMinAward.toString()) || 0,
-            maxAward: parseFloat(cleanMaxAward.toString()) || 0,
+            min_award: parseFloat(cleanMinAward.toString()) || 0,
+            max_award: parseFloat(cleanMaxAward.toString()) || 0,
             renewable: cleanRenewable.toLowerCase().includes('true') || cleanRenewable.toLowerCase().includes('yes'),
             country: cleanCountry || 'US',
-            applyUrl: cleanApplyUrl,
-            isActive: true,
-            essayRequired: false,
-            recommendationsRequired: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            jobId: this.jobId,
+            apply_url: cleanApplyUrl,
+            is_active: true,
+            essay_required: false,
+            recommendations_required: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           };
+          return scholarshipObj;
         });
       }
       
@@ -266,7 +266,7 @@ export class GeneralSearchScraper extends BaseScraper {
     }
   }
 
-  private removeDuplicates(scholarships: Partial<Scholarship>[]): Partial<Scholarship>[] {
+  private removeDuplicates(scholarships: any[]): any[] { // Changed to any[]
     const seen = new Set<string>();
     return scholarships.filter(scholarship => {
       const key = `${scholarship.name?.toLowerCase()}-${scholarship.organization?.toLowerCase() || 'unknown'}`;

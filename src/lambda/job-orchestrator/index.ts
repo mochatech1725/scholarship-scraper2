@@ -6,6 +6,7 @@ import {
   ENVIRONMENT, 
   LAMBDA_TIMEOUT_MINUTES
 } from '../../utils/constants';
+import { createDatabaseFromEnv } from '../../utils/mysql-config';
 
 const batchClient = new BatchClient({});
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -20,7 +21,7 @@ export const handler = async (event: any): Promise<any> => {
 
     // Create job record in DynamoDB
     const jobRecord = {
-      jobId,
+      jobId, // <-- Use camelCase to match DynamoDB schema
       startTime,
       status: 'pending',
       website: 'all',
@@ -37,30 +38,19 @@ export const handler = async (event: any): Promise<any> => {
       Item: jobRecord,
     }));
 
-    // Load website configuration from DynamoDB
-    const websitesTableName = process.env.WEBSITES_TABLE;
+    // Load website configuration from MySQL
+    const db = await createDatabaseFromEnv();
+    await db.connect();
     
-    if (!websitesTableName) {
-      throw new Error('WEBSITES_TABLE environment variable is not set');
-    }
+    const enabledWebsites = await db.query(
+      'SELECT * FROM websites WHERE enabled = TRUE'
+    );
     
-    const scanCommand = new DocScanCommand({
-      TableName: websitesTableName,
-      FilterExpression: '#enabled = :enabled',
-      ExpressionAttributeNames: {
-        '#enabled': 'enabled'
-      },
-      ExpressionAttributeValues: {
-        ':enabled': true
-      }
-    });
-    
-    const scanResponse = await dynamoClient.send(scanCommand);
-    const enabledWebsites = scanResponse.Items || [];
+    await db.disconnect();
 
     // Submit batch job for each enabled website
     const jobPromises = enabledWebsites.map(async (website: any) => {
-      const websiteJobId = `${jobId}-${website.name}`;
+      const website_job_id = `${jobId}-${website.name}`;
       
       console.log(`Submitting job for ${website.name} (${website.scraperClass})`);
       
@@ -70,10 +60,9 @@ export const handler = async (event: any): Promise<any> => {
         jobDefinition: process.env.JOB_DEFINITION_ARN!,
         parameters: {
           website: website.name,
-          jobId: websiteJobId,
+          job_id: website_job_id,
           environment: environment,
-          scholarshipsTable: process.env.SCHOLARSHIPS_TABLE!,
-          jobsTable: process.env.JOBS_TABLE!,
+          jobs_table: process.env.JOBS_TABLE!,
         },
         containerOverrides: {
           environment: [
@@ -83,15 +72,11 @@ export const handler = async (event: any): Promise<any> => {
             },
             {
               name: 'JOB_ID',
-              value: websiteJobId,
+              value: website_job_id,
             },
             {
               name: 'ENVIRONMENT',
               value: environment,
-            },
-            {
-              name: 'SCHOLARSHIPS_TABLE',
-              value: process.env.SCHOLARSHIPS_TABLE!,
             },
             {
               name: 'JOBS_TABLE',
@@ -103,67 +88,33 @@ export const handler = async (event: any): Promise<any> => {
             },
           ],
         },
-        timeout: {
-          attemptDurationSeconds: LAMBDA_TIMEOUT_MINUTES * 60,
-        },
       };
 
-      try {
-        const submitJobCommand = new SubmitJobCommand(jobParams);
-        const submitJobResponse = await batchClient.send(submitJobCommand);
-        
-        console.log(`Successfully submitted job for ${website.name}:`, submitJobResponse.jobId);
-        
-        return {
-          website: website.name,
-          jobId: submitJobResponse.jobId,
-          status: 'submitted',
-        };
-      } catch (error) {
-        console.error(`Failed to submit job for ${website.name}:`, error);
-        return {
-          website: website.name,
-          jobId: null,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
+      return batchClient.send(new SubmitJobCommand(jobParams));
     });
 
-    const jobResults = await Promise.all(jobPromises);
-    
-    const successfulJobs = jobResults.filter(result => result.status === 'submitted');
-    const failedJobs = jobResults.filter(result => result.status === 'failed');
+    const jobResults = await Promise.allSettled(jobPromises);
+    const successfulJobs = jobResults.filter(result => result.status === 'fulfilled');
 
-    console.log(`Job submission completed:`, {
-      total: jobResults.length,
-      successful: successfulJobs.length,
-      failed: failedJobs.length,
-    });
-
-    if (failedJobs.length > 0) {
-      console.warn('Some jobs failed to submit:', failedJobs);
-    }
+    console.log(`Submitted ${jobResults.length} jobs, ${successfulJobs.length} successful`);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         message: 'Jobs submitted successfully',
-        jobId,
+        job_id: jobId,
         totalJobs: jobResults.length,
         successfulJobs: successfulJobs.length,
-        failedJobs: failedJobs.length,
-        results: jobResults,
+        failedJobs: jobResults.length - successfulJobs.length,
       }),
     };
 
   } catch (error) {
     console.error('Error in job orchestrator:', error);
-    
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Error submitting jobs',
+        message: 'Error orchestrating jobs',
         error: error instanceof Error ? error.message : 'Unknown error',
       }),
     };

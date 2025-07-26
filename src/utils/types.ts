@@ -1,29 +1,4 @@
-export interface Scholarship {
-  id: string;
-  name: string;
-  deadline: string; // ISO date string
-  url: string;
-  description: string;
-  eligibility: string;
-  organization: string;
-  academicLevel: string;
-  geographicRestrictions: string;
-  targetType: 'need' | 'merit' | 'both';
-  ethnicity: string;
-  gender: string;
-  minAward: number;
-  maxAward: number;
-  renewable: boolean;
-  country: string;
-  applyUrl: string;
-  isActive: boolean;
-  essayRequired: boolean;
-  recommendationsRequired: boolean;
-  createdAt: string; // ISO date string
-  updatedAt: string; // ISO date string
-  source: string; // website name
-  jobId: string; // batch job that created this record
-}
+import { Scholarship } from '../shared-types/scholarship.types';
 
 export interface ScrapingJob {
   jobId: string;
@@ -72,4 +47,6 @@ export interface ScrapingResult {
     totalInserted: number;
     totalUpdated: number;
   };
-} 
+}
+
+export { Scholarship }; 

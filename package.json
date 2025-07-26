@@ -29,6 +29,10 @@
     "cleanup:expired:dev": "ts-node scripts/cleanup-expired-scholarships.ts",
     "cleanup:expired:staging": "ENVIRONMENT=staging ts-node scripts/cleanup-expired-scholarships.ts",
     "cleanup:expired:prod": "ENVIRONMENT=prod ts-node scripts/cleanup-expired-scholarships.ts",
+    "check:logs:dev": "ts-node scripts/check-lambda-logs.ts",
+    "check:logs:staging": "ENVIRONMENT=staging ts-node scripts/check-lambda-logs.ts",
+    "check:logs:prod": "ENVIRONMENT=prod ts-node scripts/check-lambda-logs.ts",
+    "check:sg:dev": "ts-node scripts/check-security-group-dependencies.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",
@@ -47,6 +51,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.849.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-ec2": "^3.854.0",
     "@aws-sdk/client-eventbridge": "^3.0.0",
     "@aws-sdk/client-lambda": "^3.0.0",
     "@aws-sdk/client-s3": "^3.0.0",

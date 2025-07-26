@@ -85,7 +85,7 @@ async function migrateScholarships(): Promise<void> {
 async function migrateScholarshipItem(item: any): Promise<void> {
   // Check if scholarship already exists in MySQL
   const existing = await mysqlDb.queryOne(
-    'SELECT id FROM scholarships WHERE id = ?',
+    'SELECT scholarship_id FROM scholarships WHERE scholarship_id = ?',
     [item.id]
   );
 

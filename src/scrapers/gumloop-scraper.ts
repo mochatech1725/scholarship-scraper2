@@ -383,29 +383,24 @@ If no scholarship information is found, return null.`;
       
       // Transform to Scholarship format
       const scholarship: Partial<Scholarship> = {
-        id: ScholarshipUtils.createScholarshipId(),
-        name: TextUtils.cleanText(extractedData.title || '', { quotes: true }),
+        title: TextUtils.cleanText(extractedData.title || '', { quotes: true }),
         deadline: TextUtils.cleanText(extractedData.deadline || '', { quotes: true }),
         url: crawlResult.url,
         description: TextUtils.truncateText(TextUtils.cleanText(extractedData.description || '', { quotes: true }), DESCRIPTION_MAX_LENGTH),
         eligibility: TextUtils.truncateText(TextUtils.cleanText(extractedData.eligibility || '', { quotes: true }), ELIGIBILITY_MAX_LENGTH),
         source: 'GumLoop Crawling',
         organization: TextUtils.cleanText(extractedData.organization || '', { quotes: true }),
-        academicLevel: ScholarshipUtils.cleanAcademicLevel(extractedData.academicLevel || '') || '',
-        geographicRestrictions: TextUtils.cleanText(extractedData.geographicRestrictions || '', { quotes: true }),
-        targetType: (extractedData.targetType as 'need' | 'merit' | 'both') || 'both',
+        academic_level: ScholarshipUtils.cleanAcademicLevel(extractedData.academic_level || '') || '',
+        geographic_restrictions: TextUtils.cleanText(extractedData.geographic_restrictions || '', { quotes: true }),
+        target_type: (extractedData.target_type as 'need' | 'merit' | 'both') || 'both',
         ethnicity: TextUtils.ensureNonEmptyString(extractedData.ethnicity, 'unspecified'),
         gender: TextUtils.ensureNonEmptyString(extractedData.gender, 'unspecified'),
-        minAward: parseFloat(ScholarshipUtils.cleanAmount(extractedData.amount || '0')) || 0,
-        maxAward: parseFloat(ScholarshipUtils.cleanAmount(extractedData.amount || '0')) || 0,
+        min_award: parseFloat(ScholarshipUtils.cleanAmount(extractedData.min_award || '0')) || 0,
+        max_award: parseFloat(ScholarshipUtils.cleanAmount(extractedData.max_award || '0')) || 0,
         renewable: extractedData.renewable || false,
         country: extractedData.country || 'US',
-        isActive: true,
-        essayRequired: false,
-        recommendationsRequired: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        jobId: this.jobId,
+        essay_required: false,
+        recommendation_required: false
       };
       
       return scholarship;

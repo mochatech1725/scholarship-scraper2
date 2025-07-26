@@ -1,5 +1,6 @@
 import { BaseScraper } from './base-scraper';
-import { ScrapingResult, Scholarship } from '../utils/types';
+import { ScrapingResult } from '../utils/types';
+import { Scholarship } from '../shared-types/scholarship.types';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { 
@@ -48,14 +49,14 @@ export class CollegeScholarshipScraper extends BaseScraper {
     return results;
   }
 
-  async fetchScholarshipDetails(url: string): Promise<Partial<Scholarship>> {
+  async fetchScholarshipDetails(url: string): Promise<any> {
     try {
       const response = await axios.get(url, {
         headers: ScrapingUtils.SCRAPING_HEADERS,
         timeout: Math.min(AXIOS_GET_TIMEOUT, 10000) // Cap at 10 seconds to prevent hanging
       });
       const $ = cheerio.load(response.data);
-      const details: Partial<Scholarship> = {};
+      const details: any = {};
       
       // Extract detailed description
       const description = $('#description p').first().text().trim();
@@ -79,11 +80,11 @@ export class CollegeScholarshipScraper extends BaseScraper {
             break;
           case 'min. award:':
             const minAmount = ScholarshipUtils.cleanAmount(value);
-            details.minAward = parseFloat(minAmount) || 0;
+            details.min_award = parseFloat(minAmount) || 0;
             break;
           case 'max. award:':
             const maxAmount = ScholarshipUtils.cleanAmount(value);
-            details.maxAward = parseFloat(maxAmount) || 0;
+            details.max_award = parseFloat(maxAmount) || 0;
             break;
         }
       });
@@ -97,7 +98,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
         
         switch (label) {
           case 'enrollment level:':
-            details.academicLevel = ScholarshipUtils.cleanAcademicLevel(value) || '';
+            details.academic_level = ScholarshipUtils.cleanAcademicLevel(value) || '';
             break;
           case 'country:':
             details.country = TextUtils.cleanText(value, { quotes: true });
@@ -115,7 +116,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
       
       const applyUrl = $('#description a[href*=".pdf"], #description a[href*="apply"], #description a[href*="application"]').attr('href');
       if (applyUrl) {
-        details.applyUrl = applyUrl;
+        details.apply_url = applyUrl;
       }
       
       return details;
@@ -128,7 +129,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
   async scrape(): Promise<ScrapingResult> {
     console.log('Starting CollegeScholarship scraping...');
     const opts = { ...this.defaultOptions };
-    let scholarships: Scholarship[] = [];
+    let scholarships: any[] = [];
     let errors: string[] = [];
     let consecutiveErrors = 0;
     const maxConsecutiveErrors = 5; // Stop if 5 consecutive errors
@@ -155,7 +156,7 @@ export class CollegeScholarshipScraper extends BaseScraper {
         });
         
         const $ = cheerio.load(response.data);
-        const scholarshipPromises: Promise<Scholarship>[] = [];
+        const scholarshipPromises: Promise<any>[] = [];
         
         for (let i = 0; i < $('.row').length && consecutiveErrors < maxConsecutiveErrors && (Date.now() - startTime) < maxProcessingTime; i++) {
           const elem = $('.row')[i];
@@ -167,8 +168,8 @@ export class CollegeScholarshipScraper extends BaseScraper {
           if ($summary.length > 0 && $description.length > 0) {
             let amount = $summary.find('.lead strong').text().trim() || 'Amount varies';
             amount = ScholarshipUtils.cleanAmount(amount);
-            const minAward = parseFloat(amount) || 0;
-            const maxAward = minAward;
+            const min_award = parseFloat(amount) || 0;
+            const max_award = min_award;
             
             const rawDeadline = $summary.find('p').last().find('strong').text().trim() || 'No deadline specified';
             
@@ -211,14 +212,14 @@ export class CollegeScholarshipScraper extends BaseScraper {
               const cleanGeographicRestrictions = TextUtils.cleanText(geographicRestrictions || '', { quotes: true });
               
               const targetTypeRaw = ScholarshipUtils.determineTargetType(`${title} ${description} ${eligibility}`);
-              const targetType = (targetTypeRaw === 'Merit' ? 'merit' : targetTypeRaw === 'Need' ? 'need' : 'both') as 'need' | 'merit' | 'both';
+              const target_type = (targetTypeRaw === 'Merit' ? 'merit' : targetTypeRaw === 'Need' ? 'need' : 'both') as 'need' | 'merit' | 'both';
               
               const ethnicity = ScholarshipUtils.extractEthnicity(`${title} ${description} ${eligibility}`);
               const gender = ScholarshipUtils.extractGender(`${title} ${description} ${eligibility}`);
               
               const scholarshipPromise = (async () => {
-                                const scholarship: Scholarship = {
-                  id: ScholarshipUtils.createScholarshipId(),
+                                const scholarship: any = {
+                  scholarship_id: ScholarshipUtils.createScholarshipId(),
                   name: cleanName,
                   deadline: cleanDeadline,
                   url: link || '',
@@ -226,22 +227,21 @@ export class CollegeScholarshipScraper extends BaseScraper {
                   eligibility: TextUtils.truncateText(TextUtils.removeRedundantPhrases(rawEligibility), ELIGIBILITY_MAX_LENGTH),
                   source: 'CollegeScholarships',
                   organization: '',
-                  academicLevel: cleanedAcademicLevel,
-                  geographicRestrictions: cleanGeographicRestrictions || '',
-                  targetType,
+                  academic_level: cleanedAcademicLevel,
+                  geographic_restrictions: cleanGeographicRestrictions || '',
+                  target_type,
                   ethnicity: TextUtils.ensureNonEmptyString(ethnicity, 'unspecified'),
                   gender: TextUtils.ensureNonEmptyString(gender, 'unspecified'),
-                  minAward,
-                  maxAward,
+                  min_award,
+                  max_award,
                   renewable: false,
                   country: 'US',
-                  applyUrl: '',
-                  isActive: true,
-                  essayRequired: false,
-                  recommendationsRequired: false,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  jobId: '',
+                  apply_url: '',
+                  is_active: true,
+                  essay_required: false,
+                  recommendations_required: false,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
                 };
                 
                 // Fetch detailed information if enabled and we have a valid URL (optimized)
