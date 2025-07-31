@@ -248,7 +248,7 @@ export abstract class BaseScraper implements ScraperUtils {
     try {
       await this.initialize();
       const websites = await this.db.query(
-        'SELECT * FROM websites WHERE enabled = TRUE'
+        'SELECT * FROM websites'
       );
       return websites;
     } catch (error) {
