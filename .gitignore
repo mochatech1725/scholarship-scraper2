@@ -74,3 +74,4 @@ response.json
 artifacts/
 *.json.tmp
 bastion-key.pem
+ScholarshipTrackerSystemDesign.pdf
