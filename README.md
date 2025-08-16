@@ -25,7 +25,7 @@ npm run populate:websites:dev
 
 - **AWS CDK**: Infrastructure as Code
 - **AWS Batch with Fargate**: Containerized scraping jobs
-- **DynamoDB**: Scholarship data and job metadata storage
+- **MySQL**: Scholarship data and job metadata storage
 - **S3**: Raw data storage with lifecycle policies
 - **EventBridge**: Scheduled job triggers (hourly)
 - **Lambda**: Job orchestration

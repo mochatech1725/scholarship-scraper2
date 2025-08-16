@@ -75,3 +75,12 @@ artifacts/
 *.json.tmp
 bastion-key.pem
 ScholarshipTrackerSystemDesign.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+venv/
+.pytest_cache/
+.coverage

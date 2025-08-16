@@ -10,7 +10,7 @@ The system works as follows:
 2. **Lambda** submits batch jobs for each website to AWS Batch
 3. **AWS Batch** runs Docker containers with the scraper code
 4. **Docker containers** execute the appropriate scraper based on the website parameter
-5. **Scrapers** make API calls and save data to DynamoDB
+5. **Scrapers** make API calls and save data to MySQL
 
 ## Prerequisites
 
@@ -52,8 +52,8 @@ aws cloudformation describe-stacks \
 ```
 
 You should see outputs for:
-- `ScholarshipsTableName` - DynamoDB table for scholarships
-- `JobsTableName` - DynamoDB table for jobs
+- `ScholarshipsTableName` - MySQL table for scholarships
+- `JobsTableName` - MySQL table for jobs
 - `JobQueueArn` - AWS Batch job queue
 - `JobDefinitionArn` - AWS Batch job definition
 - `EcrImageUri` - ECR image URI
@@ -63,7 +63,7 @@ You should see outputs for:
 ### Lambda Function (`job-orchestrator`)
 
 The Lambda function:
-1. Creates a job record in DynamoDB
+1. Creates a job record in MySQL
 2. Submits batch jobs for each website (`careerone`, `collegescholarship`, `general_search`)
 3. Passes environment variables to the batch jobs
 
@@ -79,7 +79,7 @@ The batch job entry point:
 Each scraper:
 1. Extends `BaseScraper` for common functionality
 2. Implements the `scrape()` method
-3. Saves results to DynamoDB
+3. Saves results to MySQL
 4. Updates job status in the jobs table
 
 ## Testing the Deployment
@@ -103,18 +103,18 @@ Check the status of batch jobs:
 aws batch list-jobs --job-queue ScholarshipScraperStack-dev-ScraperJobQueue
 ```
 
-### 3. Check DynamoDB
+### 3. Check MySQL
 
 Query the jobs table to see job status:
 
 ```bash
-aws dynamodb scan --table-name ScholarshipScraperStack-dev-JobsTable
+mysql -u root -e "USE scholarships; SELECT * FROM jobs ORDER BY created_at DESC LIMIT 5;"
 ```
 
 Query the scholarships table to see scraped data:
 
 ```bash
-aws dynamodb scan --table-name ScholarshipScraperStack-dev-ScholarshipsTable
+mysql -u root -e "USE scholarships; SELECT COUNT(*) as total_scholarships FROM scholarships;"
 ```
 
 ## Docker-Specific Troubleshooting
@@ -174,6 +174,6 @@ aws ecr delete-repository --repository-name scholarship-scraper --force
 
 - The Docker container runs as a non-root user
 - IAM roles follow the principle of least privilege
-- All sensitive data is stored in DynamoDB with encryption at rest
+- All sensitive data is stored in MySQL with encryption at rest
 - Network access is restricted to private subnets
 - Container images are scanned for vulnerabilities 

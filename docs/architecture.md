@@ -6,17 +6,17 @@
 
 - **VPC**: Private network for Batch jobs with NAT Gateway for internet access
 - **S3 Bucket**: `scholarship-raw-data-{environment}-{account}` for storing raw scraping data
-- **DynamoDB Tables**: 
+- **MySQL Tables**: 
   - `scholarship-scholarships-{environment}`: Stores processed scholarship data with multiple GSIs
   - `scholarship-jobs-{environment}`: Tracks scraping job metadata
   - `scholarship-websites-{environment}`: Stores website configurations
-- **IAM Roles & Policies**: Secure access to AWS services including S3 and DynamoDB
+- **IAM Roles & Policies**: Secure access to AWS services including S3 and RDS MySQL
 - **CloudWatch**: Logging and monitoring with Container Insights V2
 
 ### 2. Scheduling & Orchestration
 
 - **EventBridge**: Triggers scraping jobs every hour
-- **Lambda (Job Orchestrator)**: Coordinates batch job submissions by reading from DynamoDB websites table
+- **Lambda (Job Orchestrator)**: Coordinates batch job submissions by reading from MySQL websites table
 - **AWS Batch**: Runs containerized scraping jobs on Fargate
 
 ### 3. Data Sources
@@ -58,15 +58,15 @@ s3://scholarship-raw-data-{env}-{account}/
 ## Deduplication Strategy
 
 1. **ID Generation**: MD5 hash of scholarship name + organization + deadline
-2. **Duplicate Check**: Query DynamoDB before insertion
+2. **Duplicate Check**: Query MySQL before insertion
 3. **Update Logic**: Only insert if not exists, track updates separately
 
 ## Security Considerations
 
-- **IAM Roles**: Least privilege access to S3 and DynamoDB
+- **IAM Roles**: Least privilege access to S3 and RDS MySQL
 - **VPC**: Private subnets for Batch jobs
 - **S3 Encryption**: Server-side encryption enabled
-- **DynamoDB Encryption**: Server-side encryption enabled
+- **RDS MySQL Encryption**: Server-side encryption enabled
 - **Secrets**: Environment variables for API keys
 - **User Agent**: Respectful web scraping headers
 
@@ -75,7 +75,7 @@ s3://scholarship-raw-data-{env}-{account}/
 - **CloudWatch Logs**: Application and infrastructure logs
 - **Container Insights V2**: Enhanced ECS monitoring
 - **S3 Metrics**: Storage usage and access patterns
-- **DynamoDB Metrics**: Table performance and usage
+- **RDS MySQL Metrics**: Database performance and usage
 - **Batch Job Status**: Job success/failure tracking
 - **Custom Metrics**: Scholarships found, processed, inserted
 
@@ -83,7 +83,7 @@ s3://scholarship-raw-data-{env}-{account}/
 
 - **Batch Jobs**: Parallel execution per website
 - **S3**: Unlimited storage with automatic scaling
-- **DynamoDB**: On-demand billing for variable load
+- **RDS MySQL**: On-demand billing for variable load
 - **Fargate**: Serverless container scaling
 - **Lambda**: Automatic scaling for job orchestration
 - **Website Config**: No size limitations, efficient querying
@@ -91,7 +91,7 @@ s3://scholarship-raw-data-{env}-{account}/
 ## Cost Optimization
 
 - **S3**: Cost-effective storage for raw data with lifecycle policies
-- **DynamoDB**: On-demand billing initially, provisioned for predictable loads
+- **RDS MySQL**: On-demand billing initially, provisioned for predictable loads
 - **Batch**: Spot instances for cost savings
 - **Lambda**: Pay per execution
 - **EventBridge**: Minimal cost for scheduling
@@ -100,17 +100,17 @@ s3://scholarship-raw-data-{env}-{account}/
 ## Benefits of Hybrid Storage
 
 1. **Cost Efficiency**: S3 is much cheaper for large raw data storage
-2. **Performance**: DynamoDB optimized for fast application queries
+2. **Performance**: MySQL optimized for fast application queries
 3. **Scalability**: S3 handles unlimited raw data growth
 4. **Flexibility**: Raw data available for reprocessing and analytics
 5. **Compliance**: Data lifecycle management with S3 policies
 6. **Configuration Management**: Runtime updates without redeployment
 
-## Benefits of DynamoDB Configuration
+## Benefits of MySQL Configuration
 
 1. **No Size Limits**: Can handle thousands of website configurations
 2. **Runtime Updates**: Enable/disable websites without redeployment
-3. **Better Performance**: Fast reads from DynamoDB vs S3 downloads
+3. **Better Performance**: Fast reads from MySQL vs S3 downloads
 4. **Efficient Querying**: Filter enabled websites, query by type
 5. **Scalability**: No configuration file size limitations
 6. **Cost Effective**: Pay-per-request billing for small tables

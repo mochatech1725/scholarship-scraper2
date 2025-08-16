@@ -1,7 +1,7 @@
 # MySQL Migration Guide
 
 ## Overview
-This guide covers migrating the scholarship scraper from DynamoDB to MySQL for better query performance and analytics capabilities.
+This guide covers the completed migration of the scholarship scraper from DynamoDB to MySQL for better query performance and analytics capabilities.
 
 ## Prerequisites
 1. MySQL server running (local or RDS)
@@ -53,8 +53,8 @@ npm run migrate:mysql:prod
 - **Scholarships table**: All scholarship data with proper indexing
 - **Websites table**: Scraper configuration data
 
-### ❌ Stays in DynamoDB:
-- **Jobs table**: Operational job tracking (keeps DynamoDB for efficiency)
+### ❌ Previously in DynamoDB (Now in MySQL):
+- **Jobs table**: Operational job tracking (migrated to MySQL)
 
 ## Benefits
 - Better query performance
@@ -65,6 +65,6 @@ npm run migrate:mysql:prod
 
 ## Rollback
 If needed, you can revert by:
-1. Updating scrapers to use DynamoDB again
-2. Removing MySQL dependencies
-3. Keeping existing DynamoDB tables intact 
+1. All scrapers now use MySQL
+2. Database connections are unified
+3. DynamoDB tables have been decommissioned 

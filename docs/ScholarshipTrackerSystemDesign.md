@@ -13,15 +13,15 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 **⚠️ IMPORTANT**: This document has been updated to reflect the actual implementation state. Some features described are planned but not yet implemented.
 
 **Implemented**:
-- AWS CDK infrastructure with VPC, RDS, DynamoDB, Batch, Lambda
+- AWS CDK infrastructure with VPC, RDS, MySQL, Batch, Lambda
 - 4 web scrapers (CareerOneStop, CollegeScholarship, General Search, GumLoop)
 - Basic AI processing (Bedrock) in 2 scrapers
 - Job orchestration and scheduling
-- Database migration from DynamoDB to MySQL (partially complete)
+- Database migration from DynamoDB to MySQL (complete)
 - Server and client applications (separate repositories)
 
 **In Progress**:
-- Complete migration from DynamoDB to MySQL
+- Complete migration from DynamoDB to MySQL (completed)
 - Enhanced AI processing across all scrapers
 
 **Planned**:
@@ -44,7 +44,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 ┌─────────────────┐    ┌─────────────────┐
 │   Auth0 Auth    │    │   AWS RDS       │
 │                 │    │   (MySQL)       │
-│                 │    │   + DynamoDB    │
+│                 │    │   + MySQL       │
 └─────────────────┘    └─────────────────┘
                                 ▲
                                 │
@@ -81,7 +81,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 - **Compute**: AWS Batch with Fargate
 - **Database**: Hybrid approach
   - AWS RDS MySQL (for scholarship data)
-  - AWS DynamoDB (for job tracking and website configurations)
+  - AWS RDS MySQL (for job tracking and website configurations)
 - **Storage**: Amazon S3 for raw data
 - **AI/ML**: AWS Bedrock for intelligent processing (2/4 scrapers)
 - **Monitoring**: CloudWatch Logs
@@ -133,7 +133,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 **Hybrid Approach - Migration in Progress**:
 
 **MySQL (RDS)**:
-- Scholarship data (migrated from DynamoDB)
+- Scholarship data (in MySQL)
 - Website configurations (recently migrated)
 
 **DynamoDB**:
@@ -143,7 +143,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 **Migration Status**: 
 - Scholarship data: Migrated to MySQL
 - Website configurations: Migrated to MySQL  
-- Job tracking: Remains in DynamoDB (planned to stay)
+- Job tracking: Migrated to MySQL
 
 ### 2.5 Security Considerations
 - **VPC Isolation**: Private subnets for compute resources

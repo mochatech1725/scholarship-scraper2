@@ -1,0 +1,27 @@
+# Web scraping libraries
+requests==2.32.4
+beautifulsoup4==4.12.3
+selenium==4.18.1
+cloudscraper==1.2.71
+
+# Data processing
+pandas==2.2.2
+numpy==1.26.4
+
+# Database
+pymysql==1.1.0
+
+# AWS SDK
+boto3==1.35.50
+
+# Utilities
+python-dotenv==1.0.1
+lxml==5.2.1
+html5lib==1.1
+fake-useragent==1.4.0
+tenacity==8.2.3
+
+# Development
+pytest==8.2.2
+black==24.3.0
+flake8==7.1.1
