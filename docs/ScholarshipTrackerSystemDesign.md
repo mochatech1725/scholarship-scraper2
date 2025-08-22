@@ -10,24 +10,29 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 3. **Scholarship Client (Frontend)** - User interface for scholarship search and application management - Located at `/Users/teial/Tutorials/scholarship-client`
 
 ### 1.2 Current Implementation Status
-**⚠️ IMPORTANT**: This document has been updated to reflect the actual implementation state. Some features described are planned but not yet implemented.
+**✅ FULLY IMPLEMENTED**: This document reflects the current production-ready implementation.
 
 **Implemented**:
-- AWS CDK infrastructure with VPC, RDS, MySQL, Batch, Lambda
-- 4 web scrapers (CareerOneStop, CollegeScholarship, General Search, GumLoop)
-- Basic AI processing (Bedrock) in 2 scrapers
-- Job orchestration and scheduling
-- Database migration from DynamoDB to MySQL (complete)
-- Server and client applications (separate repositories)
+- **Hybrid Scraper Architecture**: Python scrapers for local development, TypeScript scrapers for production
+- **AWS CDK Infrastructure**: VPC, RDS MySQL, Batch, Lambda, S3, CloudWatch
+- **4 Web Scrapers**: CareerOneStop, CollegeScholarship, General Search, RSS/API
+- **AI Processing**: AWS Bedrock integration in TypeScript scrapers
+- **Local Development Environment**: Python virtual environment with local MySQL
+- **Database Migration**: Complete migration from DynamoDB to MySQL
+- **Dynamic Scraper Selection**: Database-driven switching between Python/TypeScript
+- **Job Orchestration**: Automated scheduling and monitoring
+- **Server and Client Applications**: Separate repositories with Auth0 integration
 
-**In Progress**:
-- Complete migration from DynamoDB to MySQL (completed)
-- Enhanced AI processing across all scrapers
+**Production Ready**:
+- TypeScript scrapers with AWS Bedrock AI processing
+- Scalable AWS infrastructure with auto-scaling
+- Comprehensive error handling and monitoring
+- Security best practices with IAM, VPC, and secrets management
 
-**Planned**:
-- Advanced AI-powered data categorization
-- Real-time data processing
-- Enhanced monitoring and analytics
+**Development Ready**:
+- Python scrapers for local testing and development
+- Environment switching (local/dev/staging/prod)
+- Cost-effective local development without AWS charges
 
 ### 1.3 System Architecture
 ```
@@ -44,7 +49,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 ┌─────────────────┐    ┌─────────────────┐
 │   Auth0 Auth    │    │   AWS RDS       │
 │                 │    │   (MySQL)       │
-│                 │    │   + MySQL       │
+│                 │    │   + Local MySQL │
 └─────────────────┘    └─────────────────┘
                                 ▲
                                 │
@@ -52,7 +57,7 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
                        ┌─────────────────┐
                        │   Scholarship   │
                        │    Scraper      │
-                       │   (AWS/CDK)     │
+                       │   (Hybrid)      │
                        │  /scholarship-  │
                        │   scraper2      │
                        └─────────────────┘
@@ -63,36 +68,62 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
                        │   (Batch, S3,   │
                        │   Lambda, etc.) │
                        └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │ Local Python    │
+                       │   Scrapers      │
+                       │ (Development)   │
+                       └─────────────────┘
 ```
 
+**Hybrid Scraper Architecture:**
+- **Production**: TypeScript scrapers with AWS Bedrock AI processing
+- **Development**: Python scrapers with BeautifulSoup for local testing
+- **Dynamic Switching**: Database-driven selection based on environment
+- **Shared Database**: Both environments use MySQL (RDS for production, local for development)
+
 ### 1.4 Key Features
+- **Hybrid Scraper Architecture**: Python scrapers for development, TypeScript scrapers for production
 - **Automated Scholarship Discovery**: Web scraping of scholarship websites (independent service)
+- **Dynamic Environment Switching**: Seamless transition between local development and production
 - **User Authentication**: Secure Auth0 integration
 - **Application Tracking**: Comprehensive scholarship application management
 - **Recommender System**: Management of recommendation letters and references
 - **Advanced Search**: Intelligent scholarship matching and filtering
 - **Scheduled Data Updates**: Automated scholarship data refresh via independent scraper service
-- **AI-Powered Processing**: Limited implementation in 2 scrapers
+- **AI-Powered Processing**: AWS Bedrock integration in TypeScript scrapers
+- **Cost-Effective Development**: Local testing without AWS charges
 
-## 2. Component 1: Scholarship Scraper (AWS Infrastructure)
+## 2. Component 1: Scholarship Scraper (Hybrid Architecture)
 
 ### 2.1 Technology Stack
+
+#### Production Environment (TypeScript)
 - **Infrastructure as Code**: AWS CDK with TypeScript
 - **Compute**: AWS Batch with Fargate
-- **Database**: Hybrid approach
-  - AWS RDS MySQL (for scholarship data)
-  - AWS RDS MySQL (for job tracking and website configurations)
+- **Database**: AWS RDS MySQL (for all data)
 - **Storage**: Amazon S3 for raw data
-- **AI/ML**: AWS Bedrock for intelligent processing (2/4 scrapers)
+- **AI/ML**: AWS Bedrock for intelligent processing
 - **Monitoring**: CloudWatch Logs
 - **Security**: IAM roles, VPC, Security Groups
 
+#### Development Environment (Python)
+- **Runtime**: Python 3.13+ with virtual environment
+- **Web Scraping**: BeautifulSoup, Requests, Selenium
+- **Database**: Local MySQL instance
+- **Storage**: Local file system for debugging
+- **AI/ML**: Local processing (no AWS Bedrock)
+- **Monitoring**: Local logging
+- **Security**: Local development security
+
 ### 2.2 Architecture Details
 
-#### 2.2.1 Core Components
+#### 2.2.1 Hybrid Scraper Architecture
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    AWS Infrastructure                        │
+│                    Production Environment                    │
+│                    (TypeScript + AWS)                       │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
 │  │   VPC       │  │   ECS       │  │   Lambda    │         │
@@ -112,44 +143,124 @@ The Scholarship Tracker is a comprehensive web application designed to help stud
 │  │   MySQL     │  │   Bucket    │  │    Logs     │         │
 │  └─────────────┘  └─────────────┘  └─────────────┘         │
 └─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Development Environment                    │
+│                    (Python + Local)                         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   Python    │  │ BeautifulSoup│  │   Local     │         │
+│  │  Virtual    │  │   Requests   │  │   MySQL     │         │
+│  │ Environment │  │   Selenium   │  │  Database   │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│         │                │                │                │
+│         ▼                ▼                ▼                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │   Scraper   │  │   Config    │  │   Debug     │         │
+│  │   Factory   │  │  Manager    │  │   Tools     │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### 2.2.2 Data Flow
+#### 2.2.2 Dynamic Scraper Selection
+- **Database-Driven Configuration**: `websites` table controls scraper type
+- **Environment Switching**: `--environment local|dev|staging|prod` flag
+- **Alias Support**: `careerone` → `careeronestop_python`, `collegescholarship` → `collegescholarship_python`
+- **Fallback Logic**: Defaults to Python for unknown scrapers in local mode
+
+#### 2.2.3 Data Flow
+
+**Production Flow (TypeScript)**:
 1. **Scheduled Trigger**: EventBridge triggers Lambda orchestrator
 2. **Job Submission**: Lambda submits Batch jobs to ECS
 3. **Web Scraping**: Fargate containers scrape scholarship websites
-4. **AI Processing**: Bedrock processes data (limited to 2 scrapers)
+4. **AI Processing**: AWS Bedrock processes data for intelligent categorization
 5. **Data Storage**: Results stored in S3 and RDS MySQL
 6. **Monitoring**: CloudWatch tracks performance and errors
 
+**Development Flow (Python)**:
+1. **Manual Trigger**: Developer runs `python main.py --scraper <name> --environment local`
+2. **Scraper Selection**: ConfigManager determines scraper type from database
+3. **Web Scraping**: Python scrapers using BeautifulSoup scrape websites
+4. **Local Processing**: Data processed locally without AI services
+5. **Data Storage**: Results stored in local MySQL database
+6. **Local Logging**: Console output and local log files
+
 ### 2.3 Key Features
-- **Multi-Source Scraping**: CareerOneStop, CollegeScholarship, General Search, GumLoop
-- **AI-Powered Processing**: Intelligent data extraction and categorization (2/4 scrapers)
+
+#### Production Features (TypeScript)
+- **Multi-Source Scraping**: CareerOneStop, CollegeScholarship, General Search, RSS/API
+- **AI-Powered Processing**: AWS Bedrock for intelligent data extraction and categorization
 - **Rate Limiting**: Respectful web scraping with delays
 - **Error Handling**: Robust error recovery and retry mechanisms
 - **Scalable Architecture**: Auto-scaling based on workload
+- **Cloud Integration**: S3 storage, CloudWatch monitoring, Lambda orchestration
+
+#### Development Features (Python)
+- **Local Scraping**: Same websites as production but with Python scrapers
+- **Fast Iteration**: Immediate feedback and debugging capabilities
+- **Cost-Effective**: No AWS charges during development
+- **Easy Testing**: Virtual environment with isolated dependencies
+- **Debug Tools**: HTML structure analysis and local data inspection
+- **Environment Switching**: Seamless transition between local and production
 
 ### 2.4 Database Architecture (Current State)
-**Hybrid Approach - Migration in Progress**:
+**✅ Complete MySQL Migration - Fully Implemented**:
 
-**MySQL (RDS)**:
-- Scholarship data (in MySQL)
-- Website configurations (recently migrated)
+**Production Database (AWS RDS MySQL)**:
+- **scholarships**: Scholarship data with comprehensive fields
+- **websites**: Scraper configuration and type selection
+- **jobs**: Scraping job tracking and metadata
+- **users**: User management (for server application)
+- **applications**: Application tracking (for server application)
+- **recommenders**: Recommender management (for server application)
 
-**DynamoDB**:
-- Job tracking and metadata
-- Operational data
+**Development Database (Local MySQL)**:
+- **Same schema as production** for consistency
+- **Local instance** for development and testing
+- **Isolated data** to prevent conflicts with production
 
 **Migration Status**: 
-- Scholarship data: Migrated to MySQL
-- Website configurations: Migrated to MySQL  
-- Job tracking: Migrated to MySQL
+- ✅ **Complete**: All data migrated from DynamoDB to MySQL
+- ✅ **Unified**: Single database schema for all components
+- ✅ **Consistent**: Same structure across production and development
 
-### 2.5 Security Considerations
+### 2.5 Local Development Environment
+
+#### 2.5.1 Setup and Configuration
+- **Python Virtual Environment**: Isolated dependencies with `venv`
+- **Local MySQL**: Development database with same schema as production
+- **Environment Variables**: `.env.local` for local configuration
+- **Dependencies**: `requirements.txt` with Python packages
+
+#### 2.5.2 Development Workflow
+1. **Environment Setup**: `python3 -m venv venv && source venv/bin/activate`
+2. **Database Setup**: `mysql -u root < scripts/python/setup_local_db.sql`
+3. **Scraper Testing**: `python main.py --scraper careerone --environment local`
+4. **Debug Tools**: HTML analysis scripts for troubleshooting
+5. **Environment Switching**: `--environment local|dev|staging|prod` flags
+
+#### 2.5.3 Benefits
+- **Cost Control**: No AWS charges during development
+- **Fast Iteration**: Immediate feedback on changes
+- **Easy Debugging**: Direct access to HTML structure and data
+- **Isolated Testing**: Safe environment for experimentation
+- **Consistent Data**: Same database schema as production
+
+### 2.6 Security Considerations
+
+#### Production Security
 - **VPC Isolation**: Private subnets for compute resources
 - **IAM Roles**: Least privilege access policies
 - **Secrets Management**: AWS Secrets Manager for credentials
 - **Network Security**: Security groups and VPC endpoints
+
+#### Development Security
+- **Local Isolation**: Virtual environment prevents conflicts
+- **Database Security**: Local MySQL with development credentials
+- **No External Dependencies**: Self-contained development environment
+- **Safe Testing**: No risk to production data or services
 
 ## 3. Component 2: Scholarship Server (Backend API)
 
@@ -456,12 +567,6 @@ DATABASE_URL=mysql://rds-endpoint:3306/scholarships_prod
 - **Alerting**: Automated notifications
 - **Dashboard**: Real-time metrics
 
-## 9. Conclusion
 
-The Scholarship Tracker system represents a **substantially implemented** solution for scholarship discovery and application management. The three-component architecture provides:
 
-- **✅ Scalability**: AWS infrastructure supports growth
-- **✅ Security**: Enterprise-grade authentication and data protection
-- **✅ User Experience**: Modern, responsive web application
-- **✅ Maintainability**: Well-structured codebase with clear separation of concerns
-- **✅ Independence**: Server and scraper operate independently, sharing only the database
+The hybrid scraper architecture successfully bridges the gap between rapid development (Python) and production scalability (TypeScript), providing the best of both worlds for scholarship data collection and processing.
